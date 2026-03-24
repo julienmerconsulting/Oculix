@@ -41,7 +41,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- language runtimes -->
-    <sikulixjythonversion>2.7.2</sikulixjythonversion>
+    <sikulixjythonversion>2.7.4</sikulixjythonversion>
     <sikulixjrubyversion>9.2.11.1</sikulixjrubyversion>
     <!-- dependency versions -->
     <jackson.version>2.18.3</jackson.version>
