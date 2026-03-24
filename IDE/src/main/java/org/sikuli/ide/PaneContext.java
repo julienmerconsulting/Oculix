@@ -6,6 +6,7 @@ package org.sikuli.ide;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.sikuli.basics.Debug;
+import org.sikuli.basics.PreferencesUser;
 import org.sikuli.script.ImagePath;
 import org.sikuli.support.Commons;
 import org.sikuli.support.ide.IIDESupport;
@@ -15,7 +16,7 @@ import org.sikuli.support.runner.IRunner;
 import org.sikuli.support.runner.InvalidRunner;
 import org.sikuli.support.runner.TextRunner;
 import org.sikuli.support.gui.SXDialog;
-import org.sikuli.util.IButton;
+import org.sikuli.support.ide.IButton;
 
 import javax.swing.text.BadLocationException;
 import java.io.*;
@@ -594,7 +595,7 @@ class PaneContext {
     pane.restoreCaretPosition();
   }
 
-  private void doShowThumbs() {
+  void doShowThumbs() {
     if (getShowThumbs()) {
       String[] text = pane.getText().split("\n");
       List<Map<String, Object>> images = collectImages(text);
