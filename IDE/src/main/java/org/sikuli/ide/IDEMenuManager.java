@@ -12,7 +12,7 @@ import org.sikuli.support.Commons;
 import org.sikuli.support.FileManager;
 import org.sikuli.support.devices.IScreen;
 import org.sikuli.support.gui.SXDialog;
-import org.sikuli.support.ide.AutoUpdater;
+import org.sikuli.support.ide.ExtensionManager;
 import org.sikuli.support.ide.IDEDesktopSupport;
 
 import javax.swing.*;
@@ -309,7 +309,7 @@ class IDEMenuManager {
         Sikulix.popError("Please save script before!", "Export as jar");
       } else {
         File fScript = codePane.saveAndGetCurrentFile();
-        List<String> options = new ArrayList<>();
+        java.util.List<String> options = new ArrayList<>();
         options.add("plain");
         options.add(fScript.getParentFile().getAbsolutePath());
         String fpJar = FileManager.makeScriptjar(options);
@@ -329,7 +329,7 @@ class IDEMenuManager {
         Sikulix.popError("Please save script before!", "Export as runnable jar");
       } else {
         File fScript = codePane.saveAndGetCurrentFile();
-        List<String> options = new ArrayList<>();
+        java.util.List<String> options = new ArrayList<>();
         options.add(fScript.getParentFile().getAbsolutePath());
         String fpJar = FileManager.makeScriptjar(options);
         if (null != fpJar) {
