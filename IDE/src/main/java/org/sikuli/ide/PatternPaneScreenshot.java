@@ -117,7 +117,7 @@ class PatternPaneScreenshot extends JPanel implements ChangeListener, ComponentL
     sldSimilar.setMajorTickSpacing(10);
     sldSimilar.setPaintTicks(true);
 
-    Hashtable<Integer, JLabel> labelTable = new Hashtable<Integer, JLabel>();
+    Hashtable<Integer, JLabel> labelTable = new Hashtable<>();
     labelTable.put(new Integer(0), new JLabel("00"));
     labelTable.put(new Integer(50), new JLabel("50"));
     labelTable.put(new Integer(100), new JLabel("99"));
@@ -127,43 +127,45 @@ class PatternPaneScreenshot extends JPanel implements ChangeListener, ComponentL
     sldSimilar.addChangeListener(this);
     return sldSimilar;
   }
-
-  public void setParameters(final String patFilename,
-          final boolean exact, final double similarity,
-          final int numMatches) {
-    if (!_runFind) {
-      _showMatches = null;
-      _fullMatches.clear();
-      repaint();
-      _runFind = true;
-      patternFileName = patFilename;
-      new Thread(() -> {
-        try {
-          Finder f = new Finder(_simg);
-          f.findAll(new Pattern(patFilename).similar(0.00001));
-
-          int count = 0;
-          while (f.hasNext()) {
-            if (++count > MAX_NUM_MATCHING) {
-              break;
-            }
-            Match m = f.next();
-            Debug.log(4, me + "f.next(%d): " + m.toString(), count);
-
-            _fullMatches.add(m);
+public void setParameters(final String patFilename,
+        final boolean exact, final double similarity,
+        final int numMatches) {
+  if (!_runFind) {
+    _showMatches = null;
+    _fullMatches.clear();
+    repaint();
+    _runFind = true;
+    patternFileName = patFilename;
+    new Thread(() -> {
+      try {
+        Finder f = new Finder(_simg);
+        f.findAll(new Pattern(patFilename).similar(0.00001));
+        int count = 0;
+        while (f.hasNext()) {
+          if (++count > MAX_NUM_MATCHING) {
+            break;
           }
-
-          EventQueue.invokeLater(() -> {
-            setParameters(exact, similarity, numMatches);
-          });
-        } catch (Exception e) {
-          Debug.error(me + "Problems searching image in ScreenUnion\n%s", e.getMessage());
+          Match m = f.next();
+          Debug.log(4, me + "f.next(%d): " + m.toString(), count);
+          _fullMatches.add(m);
         }
-      }).start();
-    } else {
-      setParameters(exact, similarity, numMatches);
-    }
+        EventQueue.invokeLater(() -> {
+          setParameters(exact, similarity, numMatches);
+        });
+      } catch (UnsatisfiedLinkError e) {
+        // OpenCV natif non disponible — recherche ignoree
+        Debug.error(me + "OpenCV indispo, recherche ignoree: %s", e.getMessage());
+        EventQueue.invokeLater(() -> {
+          setParameters(exact, similarity, numMatches);
+        });
+      } catch (Exception e) {
+        Debug.error(me + "Problems searching image in ScreenUnion\n%s", e.getMessage());
+      }
+    }).start();
+  } else {
+    setParameters(exact, similarity, numMatches);
   }
+}
 
   public void reloadImage() {
     _runFind = false;
@@ -300,12 +302,10 @@ class PatternPaneScreenshot extends JPanel implements ChangeListener, ComponentL
   @Override
   public void stateChanged(javax.swing.event.ChangeEvent e) {
     Object src = e.getSource();
-    if (src instanceof JSlider) {
-      JSlider source = (JSlider) e.getSource();
+    if (src instanceof JSlider source) {
       int val = (int) source.getValue();
       setSimilarity((double) val / 100);
-    } else if (src instanceof JSpinner) {
-      JSpinner source = (JSpinner) e.getSource();
+    } else if (src instanceof JSpinner source) {
       int val = (Integer) source.getValue();
       setNumMatches(val);
     }
