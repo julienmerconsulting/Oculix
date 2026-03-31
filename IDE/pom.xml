@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!--
-  ~ Copyright (c) 2010-2020, sikuli.org, sikulix.com - MIT license
+  ~ Copyright (c) 2010-2026, sikuli.org, sikulix.com, oculix-org - MIT license
   -->
 
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -8,23 +8,28 @@
 
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>com.sikulix</groupId>
+  <groupId>io.github.oculix-org</groupId>
   <artifactId>oculixide</artifactId>
   <version>3.0.1</version>
 
-  <name>Oculix IDE</name>
-  <description>... edit and run SikuliX scripts</description>
+  <name>OculiX IDE</name>
+  <description>Visual automation IDE - edit and run OculiX scripts</description>
 
-  <url>http://www.sikulix.com</url>
+  <url>https://github.com/oculix-org/Oculix</url>
 
   <licenses>
     <license>
       <name>MIT License</name>
-      <url>http://www.sikulix.com/disclaimer/#license</url>
+      <url>https://github.com/oculix-org/Oculix/blob/master/LICENSE</url>
     </license>
   </licenses>
 
   <developers>
+    <developer>
+      <id>julienmerconsulting</id>
+      <name>Julien Mer</name>
+      <email>julien.mer38@gmail.com</email>
+    </developer>
     <developer>
       <id>RaiMan</id>
       <name>Raimund Hocke</name>
@@ -33,9 +38,9 @@
   </developers>
 
   <scm>
-    <connection>scm:git:git@github.com:RaiMan/SikuliX1.git</connection>
-    <developerConnection>scm:git:git@github.com:RaiMan/SikuliX1.git</developerConnection>
-    <url>git@github.com:RaiMan/SikuliX1.git</url>
+    <connection>scm:git:git@github.com:oculix-org/Oculix.git</connection>
+    <developerConnection>scm:git:git@github.com:oculix-org/Oculix.git</developerConnection>
+    <url>https://github.com/oculix-org/Oculix</url>
   </scm>
 
   <properties>
@@ -46,7 +51,7 @@
 
   <dependencies>
     <dependency>
-      <groupId>com.sikulix</groupId>
+      <groupId>io.github.oculix-org</groupId>
       <artifactId>oculixapi</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -104,7 +109,7 @@
         <plugins>
           <plugin>
             <artifactId>maven-assembly-plugin</artifactId>
-            <version>3.1.1</version>
+            <version>3.7.1</version>
             <configuration>
               <archive>
                 <manifest>
@@ -138,7 +143,7 @@
         <plugins>
           <plugin>
             <artifactId>maven-assembly-plugin</artifactId>
-            <version>3.1.1</version>
+            <version>3.7.1</version>
             <configuration>
               <archive>
                 <manifest>
@@ -172,7 +177,7 @@
         <plugins>
           <plugin>
             <artifactId>maven-assembly-plugin</artifactId>
-            <version>3.1.1</version>
+            <version>3.7.1</version>
             <configuration>
               <archive>
                 <manifest>
@@ -206,7 +211,7 @@
         <plugins>
           <plugin>
             <artifactId>maven-assembly-plugin</artifactId>
-            <version>3.1.1</version>
+            <version>3.7.1</version>
             <configuration>
               <archive>
                 <manifest>
@@ -230,16 +235,90 @@
         </plugins>
       </build>
     </profile>
+    <!-- release vers Maven Central -->
+    <profile>
+      <id>release</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.9.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <tokenAuth>true</tokenAuth>
+              <autoPublish>true</autoPublish>
+              <waitUntil>published</waitUntil>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.8</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <configuration>
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>3.4.0</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar-no-fork</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.12.0</version>
+            <configuration>
+              <use>false</use>
+              <source>17</source>
+              <doclint>none</doclint>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 
   <build>
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.8.1</version>
+        <version>3.14.0</version>
         <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
+          <source>17</source>
+          <target>17</target>
         </configuration>
       </plugin>
     </plugins>
