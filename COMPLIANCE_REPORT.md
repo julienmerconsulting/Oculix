@@ -107,8 +107,10 @@ OculiX 3.0.1 is a fork of the archived SikuliX1 project, providing visual automa
 | Dependency | Version | CVE(s) | Severity | Fixed In | Status |
 |------------|---------|--------|----------|----------|--------|
 | commons-io | 2.8.0 | CVE-2024-47554 | HIGH | 2.14.0 | **Risk Identified** |
-| jython-slim | 2.7.2 | CVE-2013-2027, transitive Bouncy Castle CVEs | MEDIUM-HIGH | 2.7.4 | **Attention** |
-| jruby-complete | 9.2.11.1 | Inherited Ruby/RubyGems CVEs, outdated Bouncy Castle | MEDIUM | 9.4.x | **Attention** |
+| jruby-complete | 9.2.11.1 | CVE-2022-1471 (CRITICAL, CVSS 9.8 — bundled SnakeYAML RCE), Bouncy Castle CVEs | HIGH | 9.4.x | **Risk Identified** |
+| commons-lang3 | 3.12.0 | CVE-2025-48924 (MEDIUM, CVSS 5.3 — recursion DoS) | MEDIUM | 3.18.0 | **Attention** |
+| jackson-core | 2.9.10 | CVE-2025-52999 (MEDIUM — StackOverflow via deep nesting) | MEDIUM | 2.15.0 | **Attention** |
+| jython-slim | 2.7.2 | CVE-2013-2027, transitive Bouncy Castle CVEs | MEDIUM | 2.7.4 | **Attention** |
 
 #### LOW / NO DIRECT CVE
 
@@ -120,7 +122,7 @@ OculiX 3.0.1 is a fork of the archived SikuliX1 project, providing visual automa
 | commons-exec | 1.3 | OK | No known CVEs |
 | slf4j-nop | 1.7.28 | OK | No known CVEs |
 | py4j | 0.10.9.1 | OK | No known CVEs |
-| commons-lang3 | 3.12.0 | OK | No known CVEs for this version |
+| commons-lang3 | 3.12.0 | **Attention** | CVE-2025-48924 (MEDIUM, CVSS 5.3) — recursion DoS in `ClassUtils.getClass()`. Fixed in 3.18.0 |
 | jaxb-api | 2.3.1 | OK | No known CVEs |
 | json (org.json) | 20251224 | OK | Recent version |
 
@@ -128,8 +130,8 @@ OculiX 3.0.1 is a fork of the archived SikuliX1 project, providing visual automa
 
 | Library | Status | Notes |
 |---------|--------|-------|
-| JSch (embedded) | **Attention** | Vendored version; cannot be independently updated. Original JSch project is unmaintained. No version tracking possible. |
-| TigerVNC (embedded) | **Attention** | Vendored version; cannot be independently updated. No version tracking. SSH tunnel code handles key material. |
+| JSch (embedded) | **Risk Identified** | CVE-2023-48795 (HIGH, CVSS 5.9) — Terrapin SSH prefix truncation attack. Original JSch is unmaintained and will never be patched. Vendored code cannot be independently updated. |
+| TigerVNC (embedded) | **Attention** | Multiple CVEs in native TigerVNC pre-1.10.1 (CVE-2019-15691 through 15695 — heap/stack overflows). Java viewer may not be affected by C++ native CVEs, but this is unverified. Vendored code cannot be independently updated. |
 
 ### 2.2 Screenshot & Temporary File Handling
 
@@ -315,11 +317,12 @@ OculiX 3.0.1 is a fork of the archived SikuliX1 project, providing visual automa
 3. **HIGH — Resolve TigerVNC GPL license conflict** — either re-license the project, extract TigerVNC as a separate module, or replace with a compatible VNC implementation
 4. **HIGH — Add automated tests** and remove `-DskipTests` from CI workflows
 5. **HIGH — Upgrade `commons-io`** from 2.8.0 to 2.14.0+
-6. **MEDIUM — Add OWASP Dependency-Check** to CI pipeline for continuous CVE monitoring
-7. **MEDIUM — Upgrade `jython-slim`** to 2.7.4 and `jruby-complete` to 9.4.x
-8. **MEDIUM — Replace vendored JSch** with maintained fork (e.g., `com.github.mwiede:jsch`)
-9. **LOW — Fix `.java-version`** file to match actual Java 17 target
-10. **LOW — Add SBOM generation** (e.g., CycloneDX Maven plugin)
+6. **HIGH — Upgrade `jruby-complete`** from 9.2.11.1 to 9.4.x+ (bundled SnakeYAML CRITICAL CVE-2022-1471)
+7. **HIGH — Replace vendored JSch** with maintained fork (`com.github.mwiede:jsch` >= 0.2.15) to fix Terrapin attack (CVE-2023-48795)
+8. **MEDIUM — Add OWASP Dependency-Check** to CI pipeline for continuous CVE monitoring
+9. **MEDIUM — Upgrade `jython-slim`** to 2.7.4, `commons-lang3` to 3.18.0+, `jackson-core` to 2.15.0+
+10. **LOW — Fix `.java-version`** file to match actual Java 17 target
+11. **LOW — Add SBOM generation** (e.g., CycloneDX Maven plugin)
 
 ### Disclaimer
 
