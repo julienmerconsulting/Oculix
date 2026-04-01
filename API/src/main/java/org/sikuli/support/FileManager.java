@@ -529,7 +529,7 @@ public class FileManager {
     }
     ImageWriter writer = writers.next();
     ImageWriteParam writeParam = writer.getDefaultWriteParam();
-    ImageTypeSpecifier typeSpec = ImageTypeSpecifier.createFromBufferedImage(img);
+    ImageTypeSpecifier typeSpec = ImageTypeSpecifier.createFromRenderedImage(img);
     IIOMetadata metadata = writer.getDefaultImageMetadata(typeSpec, writeParam);
 
     int dpi;
