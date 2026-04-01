@@ -16,11 +16,11 @@ import org.opencv.utils.Converters;
 
 public class Core {
     // these constants are wrapped inside functions to prevent inlining
-    private static String getVersion() { return "4.5.4"; }
-    private static String getNativeLibraryName() { return "opencv_java454"; }
+    private static String getVersion() { return "4.10.0"; }
+    private static String getNativeLibraryName() { return "opencv_java4100"; }
     private static int getVersionMajorJ() { return 4; }
-    private static int getVersionMinorJ() { return 5; }
-    private static int getVersionRevisionJ() { return 4; }
+    private static int getVersionMinorJ() { return 10; }
+    private static int getVersionRevisionJ() { return 0; }
     private static String getVersionStatusJ() { return ""; }
 
     public static final String VERSION = getVersion();

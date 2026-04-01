@@ -12,9 +12,17 @@ import org.sikuli.support.devices.IScreen;
 
 import java.awt.Color;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.util.*;
 import java.util.regex.Matcher;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.stream.ImageInputStream;
+import org.w3c.dom.Node;
+import org.w3c.dom.NamedNodeMap;
 
 public class Finder implements Iterator<Match> {
 
@@ -188,6 +196,7 @@ public class Finder implements Iterator<Match> {
       }
       _image = aPtn.getImage();
       _findInput.setTarget(possibleImageResizeOrCallback(_image, aPtn.getResize()));
+      _findInput.setTargetImage(_image);
       _findInput.setSimilarity(aPtn.getSimilar());
       _findInput.setIsPattern();
       _results = Finder2.find(_findInput);
@@ -213,6 +222,7 @@ public class Finder implements Iterator<Match> {
     if (img.isValid()) {
       _image = img;
       _findInput.setTarget(possibleImageResizeOrCallback(img));
+      _findInput.setTargetImage(img);
       _findInput.setSimilarity(Settings.MinSimilarity);
       _results = Finder2.find(_findInput);
       currentMatchIndex = 0;
@@ -295,6 +305,7 @@ public class Finder implements Iterator<Match> {
       _pattern = aPtn;
       _image = aPtn.getImage();
       _findInput.setTarget(possibleImageResizeOrCallback(_image, aPtn.getResize()));
+      _findInput.setTargetImage(_image);
       _findInput.setSimilarity(aPtn.getSimilar());
       _findInput.setIsPattern();
       _findInput.setFindAll();
@@ -326,6 +337,7 @@ public class Finder implements Iterator<Match> {
     if (img.isValid()) {
       _image = img;
       _findInput.setTarget(possibleImageResizeOrCallback(img));
+      _findInput.setTargetImage(img);
       _findInput.setSimilarity(Settings.MinSimilarity);
       _findInput.setFindAll();
       Debug timing = Debug.startTimer("Finder.findAll");
@@ -573,6 +585,156 @@ public class Finder implements Iterator<Match> {
 
     private FindInput2 fInput = null;
 
+    // ========================================================
+    // OculiX : lecture DPI depuis les metadonnees PNG
+    // ========================================================
+
+    /**
+     * Lit le DPI horizontal embarque dans les metadonnees d'une image PNG.
+     * Retourne -1 si non disponible.
+     */
+    private static int getDpiFromImage(Image img) {
+      if (img == null || img.getFilename() == null) {
+        return -1;
+      }
+      try {
+        File file = new File(img.getFilename());
+        if (!file.exists()) {
+          return -1;
+        }
+        ImageInputStream iis = ImageIO.createImageInputStream(file);
+        if (iis == null) {
+          return -1;
+        }
+        Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
+        if (!readers.hasNext()) {
+          iis.close();
+          return -1;
+        }
+        ImageReader reader = readers.next();
+        reader.setInput(iis);
+        IIOMetadata metadata = reader.getImageMetadata(0);
+        if (metadata == null) {
+          iis.close();
+          return -1;
+        }
+        // Parcourir les metadonnees standard pour trouver le DPI
+        String[] formatNames = metadata.getMetadataFormatNames();
+        for (String formatName : formatNames) {
+          Node root = metadata.getAsTree(formatName);
+          int dpi = searchDpiInNode(root);
+          if (dpi > 0) {
+            iis.close();
+            return dpi;
+          }
+        }
+        iis.close();
+      } catch (Exception e) {
+        log.trace("getDpiFromImage: erreur lecture DPI: %s", e.getMessage());
+      }
+      return -1;
+    }
+
+    /**
+     * Parcourt recursivement les noeuds XML des metadonnees
+     * pour trouver la resolution horizontale (DPI).
+     */
+    private static int searchDpiInNode(Node node) {
+      if (node == null) {
+        return -1;
+      }
+      // Chercher dans les noeuds pHYs (PNG) ou HorizontalPixelSize
+      String nodeName = node.getNodeName();
+      if ("pHYs".equals(nodeName)) {
+        NamedNodeMap attrs = node.getAttributes();
+        if (attrs != null) {
+          Node ppux = attrs.getNamedItem("pixelsPerUnitXAxis");
+          Node unit = attrs.getNamedItem("unitSpecifier");
+          if (ppux != null && unit != null && "meter".equals(unit.getNodeValue())) {
+            int ppu = Integer.parseInt(ppux.getNodeValue());
+            return (int) Math.round(ppu / 39.3701); // metres vers pouces
+          }
+        }
+      }
+      if ("HorizontalPixelSize".equals(nodeName)) {
+        NamedNodeMap attrs = node.getAttributes();
+        if (attrs != null) {
+          Node val = attrs.getNamedItem("value");
+          if (val != null) {
+            double mmPerPixel = Double.parseDouble(val.getNodeValue());
+            if (mmPerPixel > 0) {
+              return (int) Math.round(25.4 / mmPerPixel);
+            }
+          }
+        }
+      }
+      // Parcours recursif des enfants
+      Node child = node.getFirstChild();
+      while (child != null) {
+        int dpi = searchDpiInNode(child);
+        if (dpi > 0) {
+          return dpi;
+        }
+        child = child.getNextSibling();
+      }
+      return -1;
+    }
+
+    /**
+     * Recupere le DPI systeme courant.
+     * 96 = scaling 100%, 120 = 125%, 144 = 150%, etc.
+     */
+    private static int getSystemDpi() {
+      try {
+        java.awt.GraphicsDevice gd = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .getDefaultScreenDevice();
+        double scale = gd.getDefaultConfiguration().getDefaultTransform().getScaleX();
+        return (int) Math.round(96 * scale);
+      } catch (Exception e) {
+        try {
+          return Toolkit.getDefaultToolkit().getScreenResolution();
+        } catch (Exception e2) {
+          return 96; // valeur par defaut
+        }
+      }
+    }
+
+    /**
+     * Calcule le ratio DPI entre l'ecran courant et l'image template.
+     * Retourne 1.0 si pas de difference ou si les DPI ne sont pas disponibles.
+     */
+    private static double getDpiRatio(FindInput2 findInput) {
+      int screenDpi = getSystemDpi();
+      int templateDpi = -1;
+
+      // 1. In-memory DPI from Image object (set at capture time)
+      Image targetImg = findInput.getTargetImage();
+      if (targetImg != null && targetImg.getCaptureDpi() > 0) {
+        templateDpi = targetImg.getCaptureDpi();
+      }
+
+      // 2. Fallback: read DPI from PNG metadata (pHYs chunk)
+      if (templateDpi <= 0) {
+        templateDpi = getDpiFromImage(targetImg);
+      }
+
+      // 3. Fallback: assume 96 DPI (legacy templates, 100% scaling)
+      if (templateDpi <= 0) {
+        templateDpi = 96;
+      }
+
+      if (screenDpi == templateDpi) {
+        return 1.0;
+      }
+      double ratio = (double) screenDpi / templateDpi;
+      log.trace("OculiX DPI-aware: template=%d dpi, ecran=%d dpi, ratio=%.4f", templateDpi, screenDpi, ratio);
+      return ratio;
+    }
+
+    // ========================================================
+    // Fin OculiX DPI
+    // ========================================================
+
     protected static FindResult2 find(FindInput2 findInput) {
       findInput.setAttributes();
       Finder2 finder2 = new Finder2();
@@ -710,6 +872,118 @@ public class Finder implements Iterator<Match> {
           findResult = new FindResult2(mResult, findInput);
         }
       }
+
+      // ========================================================
+      // OculiX : pipeline cascade multi-mode
+      // Mode 1 (ci-dessus) = match exact standard
+      // Mode 2 = DPI-aware scale
+      // Mode 3 = tolerant match (GaussianBlur)
+      // Mode 4 = smart match (grayscale)
+      // Mode 5 = relative search (gere au niveau Region/Pattern)
+      // ========================================================
+
+      // --- MODE 2 : DPI-aware scale ---
+      if (findResult == null && !findInput.isFindAll()) {
+        double dpiRatio = getDpiRatio(findInput);
+        if (dpiRatio != 1.0) {
+          begin_lap = new Date().getTime();
+          Mat scaledTarget = new Mat();
+          Imgproc.resize(findInput.getTarget(), scaledTarget, new Size(),
+              dpiRatio, dpiRatio, Imgproc.INTER_LINEAR);
+          // Verifier que le template redimensionne tient dans la source
+          if (scaledTarget.width() <= findWhere.width() && scaledTarget.height() <= findWhere.height()) {
+            mResult = doFindMatch(scaledTarget, findWhere, findInput);
+            mMinMax = Core.minMaxLoc(mResult);
+            if (mMinMax.maxVal > findInput.getScore()) {
+              findResult = new FindResult2(mResult, findInput);
+              log.trace("OculiX Mode 2 DPI-aware: match %%%.4f (ratio=%.4f) %d msec",
+                  mMinMax.maxVal * 100, dpiRatio, new Date().getTime() - begin_lap);
+            }
+          }
+          scaledTarget.release();
+        }
+      }
+
+      // --- MODE 3 : tolerant match (flou gaussien) ---
+      double originalScore = findInput.getScore();
+      if (findResult == null && !findInput.isFindAll() && !findInput.hasMask()) {
+        begin_lap = new Date().getTime();
+        Mat whatBlur = new Mat();
+        Mat whereBlur = new Mat();
+        Imgproc.GaussianBlur(findInput.getTarget(), whatBlur, new Size(3, 3), 0);
+        Imgproc.GaussianBlur(findWhere, whereBlur, new Size(3, 3), 0);
+        mResult = doFindMatch(whatBlur, whereBlur, findInput);
+        mMinMax = Core.minMaxLoc(mResult);
+        double tolerantScore = originalScore * 0.9;
+        if (mMinMax.maxVal > tolerantScore) {
+          findInput.setSimilarity(tolerantScore);
+          findResult = new FindResult2(mResult, findInput);
+          log.trace("OculiX Mode 3 tolerant: match %%%.4f (seuil=%%%.4f) %d msec",
+              mMinMax.maxVal * 100, tolerantScore * 100, new Date().getTime() - begin_lap);
+        }
+        whatBlur.release();
+        whereBlur.release();
+      }
+
+      // --- MODE 4 : smart match (grayscale) ---
+      if (findResult == null && !findInput.isFindAll() && !findInput.isGray() && !findInput.hasMask()) {
+        begin_lap = new Date().getTime();
+        Mat whatGray = new Mat();
+        Mat whereGray = new Mat();
+        try {
+          Imgproc.cvtColor(findInput.getTarget(), whatGray, Imgproc.COLOR_BGR2GRAY);
+          Imgproc.cvtColor(findWhere, whereGray, Imgproc.COLOR_BGR2GRAY);
+          Mat mResultGray = Commons.getNewMat();
+          Imgproc.matchTemplate(whereGray, whatGray, mResultGray, Imgproc.TM_CCOEFF_NORMED);
+          mMinMax = Core.minMaxLoc(mResultGray);
+          double smartScore = originalScore * 0.85;
+          if (mMinMax.maxVal > smartScore) {
+            findInput.setSimilarity(smartScore);
+            findResult = new FindResult2(mResultGray, findInput);
+            log.trace("OculiX Mode 4 smart: match %%%.4f (seuil=%%%.4f) %d msec",
+                mMinMax.maxVal * 100, smartScore * 100, new Date().getTime() - begin_lap);
+          }
+        } catch (Exception e) {
+          log.trace("OculiX Mode 4 smart: erreur conversion grayscale: %s", e.getMessage());
+        }
+        whatGray.release();
+        whereGray.release();
+      }
+      // --- MODE 5 : multi-scale brute-force (dernier recours) ---
+      if (findResult == null && !findInput.isFindAll() && !findInput.hasMask()) {
+        double[] commonScales = {1.25, 1.5, 1.75, 2.0, 0.8, 0.67, 0.5};
+        double multiScaleScore = originalScore * 0.9;
+        begin_lap = new Date().getTime();
+        for (double scale : commonScales) {
+          Mat mScaled = new Mat();
+          Imgproc.resize(findInput.getTarget(), mScaled, new Size(),
+              scale, scale, Imgproc.INTER_LINEAR);
+          if (mScaled.width() > findWhere.width() || mScaled.height() > findWhere.height()) {
+            mScaled.release();
+            continue;
+          }
+          mResult = doFindMatch(mScaled, findWhere, findInput);
+          mMinMax = Core.minMaxLoc(mResult);
+          if (mMinMax.maxVal > multiScaleScore) {
+            findInput.setSimilarity(multiScaleScore);
+            findResult = new FindResult2(mResult, findInput);
+            log.trace("OculiX Mode 5 multi-scale: match %%%.4f (scale=%.2f) %d msec",
+                mMinMax.maxVal * 100, scale, new Date().getTime() - begin_lap);
+            mScaled.release();
+            break;
+          }
+          mScaled.release();
+        }
+      }
+
+      // Restaurer le seuil original si aucun mode degrade n'a matche
+      if (findResult == null) {
+        findInput.setSimilarity(originalScore);
+      }
+
+      // ========================================================
+      // Fin OculiX pipeline cascade
+      // ========================================================
       log.trace("doFindImage: end %d msec", new Date().getTime() - begin_find);
       return findResult;
     }
@@ -1053,6 +1327,18 @@ public class Finder implements Iterator<Match> {
     }
 
     private Image image = null;
+
+    // --- OculiX : reference vers l'Image source pour lecture DPI ---
+    private Image targetImage = null;
+
+    public void setTargetImage(Image img) {
+      this.targetImage = img;
+    }
+
+    public Image getTargetImage() {
+      return targetImage;
+    }
+    // --- fin OculiX ---
 
     private double similarity = 0.7;
 

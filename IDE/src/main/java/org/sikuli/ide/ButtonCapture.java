@@ -143,9 +143,9 @@ class ButtonCapture extends ButtonOnToolbar implements Cloneable, EventObserver 
       SikulixIDE.PaneContext context = SikulixIDE.get().getActiveContext();
       final File imgFile = new File(context.getImageFolder(), givenName + ".png");
       try {
-        ImageIO.write(capturedImage, "png", imgFile);
+        org.sikuli.support.FileManager.writePngWithDpi(capturedImage, imgFile);
         if (context.getScreenshotFolder().exists()) {
-          ImageIO.write(screenShot, "png", new File(context.getScreenshotFolder(), givenName + ".png"));
+          org.sikuli.support.FileManager.writePngWithDpi(screenShot, new File(context.getScreenshotFolder(), givenName + ".png"));
         }
       } catch (IOException e) {
       }

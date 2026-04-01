@@ -9,6 +9,13 @@ import org.sikuli.basics.Settings;
 import org.sikuli.support.gui.SXDialog;
 
 import javax.imageio.ImageIO;
+import javax.imageio.ImageTypeSpecifier;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.metadata.IIOMetadata;
+import javax.imageio.metadata.IIOMetadataNode;
+import javax.imageio.stream.ImageOutputStream;
+import javax.imageio.IIOImage;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -510,6 +517,59 @@ public class FileManager {
     }
   }
 
+  /**
+   * OculiX: Write a PNG file with DPI metadata (pHYs chunk).
+   * Uses the current system screen resolution as DPI value.
+   */
+  public static void writePngWithDpi(BufferedImage img, File file) throws IOException {
+    Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("png");
+    if (!writers.hasNext()) {
+      ImageIO.write(img, "png", file);
+      return;
+    }
+    ImageWriter writer = writers.next();
+    ImageWriteParam writeParam = writer.getDefaultWriteParam();
+    ImageTypeSpecifier typeSpec = ImageTypeSpecifier.createFromRenderedImage(img);
+    IIOMetadata metadata = writer.getDefaultImageMetadata(typeSpec, writeParam);
+
+    int dpi;
+    try {
+      java.awt.GraphicsDevice gd = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
+          .getDefaultScreenDevice();
+      double scale = gd.getDefaultConfiguration().getDefaultTransform().getScaleX();
+      dpi = (int) Math.round(96 * scale);
+    } catch (Exception e) {
+      try {
+        dpi = Toolkit.getDefaultToolkit().getScreenResolution();
+      } catch (Exception e2) {
+        dpi = 96;
+      }
+    }
+
+    String metaFormat = "javax_imageio_png_1.0";
+    try {
+      IIOMetadataNode root = (IIOMetadataNode) metadata.getAsTree(metaFormat);
+      IIOMetadataNode phys = new IIOMetadataNode("pHYs");
+      int ppu = (int) Math.round(dpi * 39.3701); // DPI to pixels per meter
+      phys.setAttribute("pixelsPerUnitXAxis", String.valueOf(ppu));
+      phys.setAttribute("pixelsPerUnitYAxis", String.valueOf(ppu));
+      phys.setAttribute("unitSpecifier", "meter");
+      root.appendChild(phys);
+      metadata.mergeTree(metaFormat, root);
+    } catch (Exception e) {
+      log(-1, "writePngWithDpi: metadata failed, writing without DPI: %s", e.getMessage());
+      ImageIO.write(img, "png", file);
+      return;
+    }
+
+    try (ImageOutputStream ios = ImageIO.createImageOutputStream(file)) {
+      writer.setOutput(ios);
+      writer.write(null, new IIOImage(img, null, metadata), writeParam);
+    } finally {
+      writer.dispose();
+    }
+  }
+
   public static String saveTimedImage(BufferedImage img, String path, String name) {
     RunTime.pause(0.01f);
     if (null == path) {
@@ -529,7 +589,11 @@ public class FileManager {
       }
     }
     try {
-      ImageIO.write(img, formatName, fImage);
+      if ("png".equals(formatName)) {
+        writePngWithDpi(img, fImage);
+      } else {
+        ImageIO.write(img, formatName, fImage);
+      }
       log(3, "saveImage: %s", fImage);
     } catch (Exception ex) {
       log(-1, "saveTimedImage: did not work: %s (%s)", fImage, ex.getMessage());

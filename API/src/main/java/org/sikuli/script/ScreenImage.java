@@ -205,7 +205,7 @@ public class ScreenImage {
 	private void storeImage(File image) throws IOException {
 		String filename = image.getAbsolutePath();
 		if (!filename.equals(this.filename) || image.getName().startsWith("_")) {
-			ImageIO.write(bimg, "png", image);
+			FileManager.writePngWithDpi(bimg, image);
 			this.filename = filename;
 		}
 	}
@@ -236,7 +236,7 @@ public class ScreenImage {
 
   public void saveLastScreenImage(File fPath) {
     try {
-  		ImageIO.write(bimg, "png", new File(fPath, "LastScreenImage.png"));
+  		FileManager.writePngWithDpi(bimg, new File(fPath, "LastScreenImage.png"));
     } catch (Exception ex) {}
   }
 
@@ -293,7 +293,7 @@ public class ScreenImage {
 	public String saveInto(File path) {
 		File fImage = new File(path, String.format("%s-%d.png", "sikuliximage", new Date().getTime()));
 		try {
-			ImageIO.write(bimg, FilenameUtils.getExtension(fImage.getName()), fImage);
+			FileManager.writePngWithDpi(bimg, fImage);
 			Debug.log(3, "ScreenImage::saveImage: %s", fImage);
 		} catch (Exception ex) {
 			Debug.error("ScreenImage::saveInto: did not work: %s (%s)", fImage, ex.getMessage());

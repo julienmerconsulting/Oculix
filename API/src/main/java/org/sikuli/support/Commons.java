@@ -1104,9 +1104,76 @@ public class Commons {
   private static boolean libOpenCVloaded = false;
 
 public static void loadOpenCV() {
-    // opencv géré par Apertix/JNA
-    libOpenCVloaded = true;
-}
+    if (libOpenCVloaded) {
+      return;
+    }
+    String libName = Core.NATIVE_LIBRARY_NAME;
+
+    // 1. Apertix (nu.pattern.OpenCV) — preferred method
+    try {
+      Class<?> opencvClass = Class.forName(libOpenCVclassref);
+      java.lang.reflect.Method loadLocally = opencvClass.getMethod("loadLocally");
+      loadLocally.invoke(null);
+      libOpenCVloaded = true;
+      Debug.log(3, "OpenCV: loaded via Apertix (%s)", libOpenCVclassref);
+      return;
+    } catch (Throwable e) {
+      Debug.log(3, "OpenCV: Apertix load failed: %s", e.getMessage());
+    }
+
+    // 2. System.loadLibrary (lib already on java.library.path)
+    try {
+      System.loadLibrary(libName);
+      libOpenCVloaded = true;
+      Debug.log(3, "OpenCV: loaded via System.loadLibrary: %s", libName);
+      return;
+    } catch (Throwable e) {
+      Debug.log(3, "OpenCV: System.loadLibrary failed: %s", e.getMessage());
+    }
+
+    // 3. Fallback: extract native lib from jar and load manually
+    try {
+      String resource = null;
+      String fileName = null;
+      if (runningWindows()) {
+        resource = "win32-x86-64/" + libName + ".dll";
+        fileName = libName + ".dll";
+      } else if (runningMac()) {
+        resource = "darwin-x86-64/lib" + libName + ".dylib";
+        fileName = "lib" + libName + ".dylib";
+      } else if (runningLinux()) {
+        resource = "linux-x86-64/lib" + libName + ".so";
+        fileName = "lib" + libName + ".so";
+      }
+      if (resource != null) {
+        java.io.InputStream is = Commons.class.getClassLoader().getResourceAsStream(resource);
+        if (is != null) {
+          File tempDir = getTempFolder();
+          if (tempDir == null) {
+            tempDir = new File(System.getProperty("java.io.tmpdir"));
+          }
+          File tempLib = new File(tempDir, fileName);
+          try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tempLib)) {
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = is.read(buf)) > 0) {
+              fos.write(buf, 0, len);
+            }
+          } finally {
+            is.close();
+          }
+          System.load(tempLib.getAbsolutePath());
+          libOpenCVloaded = true;
+          Debug.log(3, "OpenCV: loaded from jar resource: %s", tempLib);
+          return;
+        }
+      }
+    } catch (Throwable e) {
+      Debug.log(3, "OpenCV: jar extraction failed: %s", e.getMessage());
+    }
+
+    Debug.log(-1, "OpenCV: FAILED to load native library '%s'", libName);
+  }
 
   private static final String jarLibsPath = "/sikulixlibs/";
   private static List<String> libsLoaded = new ArrayList<>();

@@ -170,6 +170,7 @@ public class Image extends Element {
    */
   public Image(ScreenImage img) {
     this(img.getImage(), null);
+    injectSystemDpi();
   }
 
   /**
@@ -182,6 +183,22 @@ public class Image extends Element {
    */
   public Image(ScreenImage img, String name) {
     this(img.getImage(), name);
+    injectSystemDpi();
+  }
+
+  private void injectSystemDpi() {
+    try {
+      java.awt.GraphicsDevice gd = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
+          .getDefaultScreenDevice();
+      double scale = gd.getDefaultConfiguration().getDefaultTransform().getScaleX();
+      this.captureDpi = (int) Math.round(96 * scale);
+    } catch (Exception e) {
+      try {
+        this.captureDpi = java.awt.Toolkit.getDefaultToolkit().getScreenResolution();
+      } catch (Exception e2) {
+        this.captureDpi = 96;
+      }
+    }
   }
 
   /**
@@ -332,6 +349,17 @@ public class Image extends Element {
 
   private BufferedImage bimg = null;
   private int bsize = 0;
+
+  // OculiX: DPI at which this image was captured (-1 = unknown)
+  private int captureDpi = -1;
+
+  public int getCaptureDpi() {
+    return captureDpi;
+  }
+
+  public void setCaptureDpi(int dpi) {
+    this.captureDpi = dpi;
+  }
 
   public static BufferedImage getSubimage(BufferedImage bimg, Rectangle rect) {
     return bimg.getSubimage(rect.x, rect.y, (int) rect.getWidth(), (int) rect.getHeight());
@@ -1088,7 +1116,7 @@ public class Image extends Element {
   public String save(String name, String path) {
     File fImg = new File(path, name);
     try {
-      ImageIO.write(get(), "png", fImg);
+      FileManager.writePngWithDpi(get(), fImg);
       Debug.log(3, "Image::save: %s", fImg);
     } catch (IOException e) {
       Debug.error("Image::save: %s did not work (%s)", fImg, e.getMessage());
@@ -1098,7 +1126,7 @@ public class Image extends Element {
 
   public void save(File imgFile) {
     try {
-      ImageIO.write(get(), "png", imgFile);
+      FileManager.writePngWithDpi(get(), imgFile);
       Debug.log(3, "Image(%s)::save: %s", getName(), imgFile);
     } catch (IOException e) {
       Debug.error("Image(%s)::save: %s did not work (%s)", getName(), imgFile, e.getMessage());
