@@ -131,16 +131,31 @@ if not ocrReady:
         print("Tesseract probe failed: " + str(e))
 
 if ocrReady:
-    kw.setRegion(textArea)
-    # Debug: manually test PaddleOCR pipeline before clickText
+    # Debug: test PaddleOCR on full screen first, then on textArea
     if paddle is not None and paddle.isAvailable():
-        debugImg = s.capture(textArea)
-        debugPath = debugImg.getFile(tmpdir, "debug_ocr")
-        print("Debug OCR image: " + debugPath)
-        debugJson = paddle.getClient().recognize(debugPath)
-        print("PaddleOCR raw JSON: " + str(debugJson)[:500])
-        debugTexts = paddle.getClient().recognizeAndParseTexts(debugPath)
-        print("PaddleOCR detected texts: " + str(debugTexts))
+        # 1) Full screen — does PaddleOCR see ANY text?
+        fullImg = s.capture()
+        fullPath = fullImg.getFile(tmpdir, "debug_fullscreen")
+        print("Debug fullscreen image: " + fullPath)
+        fullTexts = paddle.getClient().recognizeAndParseTexts(fullPath)
+        print("PaddleOCR fullscreen texts: " + str(fullTexts))
+
+        # 2) TextArea crop — is the crop correct?
+        cropImg = s.capture(textArea)
+        cropPath = cropImg.getFile(tmpdir, "debug_textarea")
+        print("Debug textArea image: " + cropPath + " (region: " + str(textArea) + ")")
+        cropJson = paddle.getClient().recognize(cropPath)
+        cropTexts = paddle.getClient().recognizeAndParseTexts(cropPath)
+        print("PaddleOCR textArea texts: " + str(cropTexts))
+
+        # 3) Window capture — the whole notepad window
+        winImg = s.capture(window)
+        winPath = winImg.getFile(tmpdir, "debug_window")
+        print("Debug window image: " + winPath + " (region: " + str(window) + ")")
+        winTexts = paddle.getClient().recognizeAndParseTexts(winPath)
+        print("PaddleOCR window texts: " + str(winTexts))
+
+    kw.setRegion(textArea)
     test("clickText OCULIX", lambda: kw.clickText("OCULIX"))
     time.sleep(0.3)
     kw.setRegion(textArea)
