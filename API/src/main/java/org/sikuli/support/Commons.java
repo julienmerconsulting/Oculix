@@ -477,9 +477,9 @@ public class Commons {
   //</editor-fold>
 
   //<editor-fold desc="06 version infos">
-  private static String SYSWIN = "windows";
-  private static String SYSMAC = "mac";
-  private static String SYSLUX = "linux";
+  private static final String SYSWIN = "windows";
+  private static final String SYSMAC = "mac";
+  private static final String SYSLUX = "linux";
 
   public static String getSysName() {
     return runningWindows() ? SYSWIN : (runningMac() ? SYSMAC : SYSLUX);
