@@ -19,13 +19,11 @@ import static org.sikuli.support.ide.SikuliIDEI18N._I;
 
 /**
  * Vertical sidebar replacing the classic JMenuBar + JToolBar.
- * Contains action buttons (Run, Stop, Capture, Record) and navigation
- * items (File, Edit, Tools, Help) with popup submenus.
+ * Organized in logical groups: Run, Scripts, Tools, Help.
  */
 public class OculixSidebar extends JPanel {
 
   private boolean collapsed = false;
-  private int expandedWidth = 200;
   private int collapsedWidth = 50;
 
   // Action buttons
@@ -40,12 +38,6 @@ public class OculixSidebar extends JPanel {
   private SidebarItem navTools;
   private SidebarItem navHelp;
 
-  // Submenus
-  private SidebarSubmenu fileSubmenu;
-  private SidebarSubmenu editSubmenu;
-  private SidebarSubmenu toolsSubmenu;
-  private SidebarSubmenu helpSubmenu;
-
   // Theme toggle
   private SidebarItem btnTheme;
   private boolean isDark = true;
@@ -53,131 +45,128 @@ public class OculixSidebar extends JPanel {
   // Version label
   private JLabel versionLabel;
 
-  // Panels for layout
-  private JPanel topSection;
-  private JPanel bottomSection;
-  private JPanel footerSection;
+  // Panels for layout sections
+  private JPanel mainPanel;
+  private JPanel footerPanel;
 
   public OculixSidebar() {
-    setLayout(new MigLayout("wrap 1, insets 8, fill", "[fill]", "[]0[]push[]0[]"));
-    setPreferredSize(new Dimension(expandedWidth, 0));
+    setLayout(new BorderLayout());
     setMinimumSize(new Dimension(collapsedWidth, 0));
     putClientProperty(FlatClientProperties.STYLE, "background: darken(@background, 3%)");
 
-    initSections();
+    mainPanel = new JPanel(new MigLayout("wrap 1, insets 8, gap 0", "[fill, grow]", ""));
+    mainPanel.setOpaque(false);
+
+    footerPanel = new JPanel(new MigLayout("wrap 1, insets 8, gap 2", "[fill, grow]", ""));
+    footerPanel.setOpaque(false);
+
+    add(mainPanel, BorderLayout.NORTH);
+    add(footerPanel, BorderLayout.SOUTH);
+
     addResizeHandle();
   }
 
-  private void initSections() {
-    // Top section: logo + action buttons
-    topSection = new JPanel(new MigLayout("wrap 1, insets 4, gap 2", "[fill]"));
-    topSection.setOpaque(false);
-
-    JLabel logo = new JLabel("OculiX");
-    logo.setFont(UIManager.getFont("h3.font"));
-    logo.setHorizontalAlignment(SwingConstants.CENTER);
-    logo.setBorder(BorderFactory.createEmptyBorder(8, 0, 12, 0));
-    topSection.add(logo);
-
-    topSection.add(new JSeparator());
-
-    add(topSection, "growx");
-
-    // Bottom section: navigation items
-    bottomSection = new JPanel(new MigLayout("wrap 1, insets 4, gap 2", "[fill]"));
-    bottomSection.setOpaque(false);
-    add(bottomSection, "growx");
-
-    // Footer section: theme toggle + version
-    footerSection = new JPanel(new MigLayout("wrap 1, insets 4, gap 2", "[fill]"));
-    footerSection.setOpaque(false);
-    add(footerSection, "growx, dock south");
+  private JLabel addSectionHeader(String text) {
+    JLabel header = new JLabel(text);
+    header.setFont(UIManager.getFont("small.font"));
+    header.setForeground(UIManager.getColor("Label.disabledForeground"));
+    header.setBorder(BorderFactory.createEmptyBorder(12, 8, 4, 0));
+    mainPanel.add(header);
+    return header;
   }
 
   /**
    * Initializes the action buttons section.
-   * Must be called after SikulixIDE creates its button actions.
    */
   public void initActionButtons(ActionListener runAction, ActionListener runSlowAction,
                                  ActionListener captureAction, ActionListener recordAction) {
+    // Logo
+    JLabel logo = new JLabel("OculiX");
+    logo.setFont(UIManager.getFont("h3.font"));
+    logo.setHorizontalAlignment(SwingConstants.CENTER);
+    logo.setBorder(BorderFactory.createEmptyBorder(8, 0, 8, 0));
+    mainPanel.add(logo);
+
+    mainPanel.add(new JSeparator(), "growx, gaptop 4, gapbottom 4");
+
+    // Run group
     btnRun = new SidebarItem("Run",
         loadIcon("/icons/run_big_green.png", 18), runAction);
-    btnRun.setToolTipText(_I("btnRunLabel"));
+    btnRun.setToolTipText(_I("btnRunLabel") + " (Ctrl+R)");
     btnRun.setMnemonic(java.awt.event.KeyEvent.VK_R);
-    topSection.add(btnRun);
+    mainPanel.add(btnRun);
 
     btnRunSlow = new SidebarItem("Run Slow",
         loadIcon("/icons/runviz.png", 18), runSlowAction);
     btnRunSlow.setToolTipText(_I("btnRunSlowMotionLabel"));
-    topSection.add(btnRunSlow);
+    mainPanel.add(btnRunSlow);
+
+    // Scripts group
+    addSectionHeader("SCRIPTS");
+
+    navFile = new SidebarItem(_I("menuFile") + "  \u25B8", null);
+    navFile.setMnemonic(java.awt.event.KeyEvent.VK_F);
+    mainPanel.add(navFile);
+
+    navEdit = new SidebarItem(_I("menuEdit") + "  \u25B8", null);
+    navEdit.setMnemonic(java.awt.event.KeyEvent.VK_E);
+    mainPanel.add(navEdit);
+
+    // Tools group
+    addSectionHeader("TOOLS");
 
     btnCapture = new SidebarItem("Capture",
         loadIcon("/icons/capture-small.png", 18), captureAction);
     btnCapture.setToolTipText(_I("btnCaptureLabel"));
-    topSection.add(btnCapture);
+    mainPanel.add(btnCapture);
 
     btnRecord = new SidebarItem("Record",
         loadIcon("/icons/record.png", 18), recordAction);
     btnRecord.setToolTipText(_I("btnRecordLabel"));
-    topSection.add(btnRecord);
+    mainPanel.add(btnRecord);
 
-    topSection.add(new JSeparator());
+    navTools = new SidebarItem(_I("menuTool") + "  \u25B8", null);
+    navTools.setMnemonic(java.awt.event.KeyEvent.VK_T);
+    mainPanel.add(navTools);
+
+    // Help group
+    addSectionHeader("HELP");
+
+    navHelp = new SidebarItem(_I("menuHelp") + "  \u25B8", null);
+    navHelp.setMnemonic(java.awt.event.KeyEvent.VK_H);
+    mainPanel.add(navHelp);
   }
 
   /**
-   * Initializes the navigation items with popup submenus.
-   * File, Edit, Tools, Help — each opens a popup submenu on click.
+   * Wires navigation items to popup submenus built from existing JMenu actions.
    */
   public void initNavigation(SidebarSubmenu fileSub, SidebarSubmenu editSub,
                               SidebarSubmenu toolsSub, SidebarSubmenu helpSub) {
-    this.fileSubmenu = fileSub;
-    this.editSubmenu = editSub;
-    this.toolsSubmenu = toolsSub;
-    this.helpSubmenu = helpSub;
-
-    navFile = createNavItem(_I("menuFile"), "\uD83D\uDCC1", fileSub);
-    navFile.setMnemonic(java.awt.event.KeyEvent.VK_F);
-    bottomSection.add(navFile);
-
-    navEdit = createNavItem(_I("menuEdit"), "\u270F\uFE0F", editSub);
-    navEdit.setMnemonic(java.awt.event.KeyEvent.VK_E);
-    bottomSection.add(navEdit);
-
-    navTools = createNavItem(_I("menuTool"), "\uD83D\uDD27", toolsSub);
-    navTools.setMnemonic(java.awt.event.KeyEvent.VK_T);
-    bottomSection.add(navTools);
-
-    navHelp = createNavItem(_I("menuHelp"), "\u2753", helpSub);
-    navHelp.setMnemonic(java.awt.event.KeyEvent.VK_H);
-    bottomSection.add(navHelp);
-  }
-
-  private SidebarItem createNavItem(String text, String emoji, SidebarSubmenu submenu) {
-    // Use a plain text icon as fallback since we don't have dedicated nav icons
-    SidebarItem item = new SidebarItem(text, null);
-    item.addActionListener(e -> submenu.showBelow(item));
-    return item;
+    navFile.addActionListener(e -> fileSub.showBelow(navFile));
+    navEdit.addActionListener(e -> editSub.showBelow(navEdit));
+    navTools.addActionListener(e -> toolsSub.showBelow(navTools));
+    navHelp.addActionListener(e -> helpSub.showBelow(navHelp));
   }
 
   /**
    * Initializes the footer with theme toggle and version label.
    */
   public void initFooter(String version, ActionListener themeAction) {
-    footerSection.add(new JSeparator());
+    footerPanel.add(new JSeparator(), "growx, gapbottom 4");
 
-    btnTheme = new SidebarItem("Dark / Light", null, e -> {
+    btnTheme = new SidebarItem("\u263C  Dark / Light", null, e -> {
       toggleTheme();
       if (themeAction != null) {
         themeAction.actionPerformed(e);
       }
     });
-    footerSection.add(btnTheme);
+    footerPanel.add(btnTheme);
 
-    versionLabel = new JLabel(version);
+    versionLabel = new JLabel("v" + version);
     versionLabel.setFont(UIManager.getFont("small.font"));
     versionLabel.setHorizontalAlignment(SwingConstants.CENTER);
     versionLabel.setForeground(UIManager.getColor("Label.disabledForeground"));
-    footerSection.add(versionLabel);
+    footerPanel.add(versionLabel);
   }
 
   private void toggleTheme() {
@@ -199,35 +188,25 @@ public class OculixSidebar extends JPanel {
   }
 
   /**
-   * Toggle between collapsed (icons only, 50px) and expanded (icons + labels, 180px) mode.
+   * Toggle between collapsed (icons only) and expanded (icons + labels) mode.
    */
   public void toggleCollapsed() {
     collapsed = !collapsed;
-    setPreferredSize(new Dimension(collapsed ? collapsedWidth : expandedWidth, 0));
 
-    // Update all SidebarItems
-    for (Component c : topSection.getComponents()) {
+    for (Component c : mainPanel.getComponents()) {
+      if (c instanceof SidebarItem) {
+        ((SidebarItem) c).setCollapsed(collapsed);
+      }
+      if (c instanceof JLabel && !(c instanceof SidebarItem)) {
+        c.setVisible(!collapsed);
+      }
+    }
+    for (Component c : footerPanel.getComponents()) {
       if (c instanceof SidebarItem) {
         ((SidebarItem) c).setCollapsed(collapsed);
       }
     }
-    for (Component c : bottomSection.getComponents()) {
-      if (c instanceof SidebarItem) {
-        ((SidebarItem) c).setCollapsed(collapsed);
-      }
-    }
-    for (Component c : footerSection.getComponents()) {
-      if (c instanceof SidebarItem) {
-        ((SidebarItem) c).setCollapsed(collapsed);
-      }
-    }
-
-    // Hide/show version label and logo
     versionLabel.setVisible(!collapsed);
-    Component logo = topSection.getComponent(0);
-    if (logo instanceof JLabel) {
-      ((JLabel) logo).setText(collapsed ? "OX" : "OculiX");
-    }
 
     revalidate();
     repaint();
@@ -238,7 +217,6 @@ public class OculixSidebar extends JPanel {
   }
 
   private void addResizeHandle() {
-    // Double-click on sidebar border toggles collapsed/expanded
     addMouseListener(new MouseAdapter() {
       @Override
       public void mouseClicked(MouseEvent e) {

@@ -2,5 +2,5 @@
 
 #image; /icons/sikulix-red-x.png
 ---
-SikuliX-IDE  ---  {sxversion}  ---  starting on Java {javaversion}; bold
+OculiX IDE  ---  {sxversion}  ---  starting on Java {javaversion}; bold
 
