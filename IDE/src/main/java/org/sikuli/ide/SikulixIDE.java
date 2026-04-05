@@ -578,6 +578,13 @@ public class SikulixIDE extends JFrame {
             lastWasSeparator = false;
           }
         }
+      } else if (!item.isEnabled()) {
+        // Section header label (disabled bold item) — reproduce in submenu
+        JMenuItem header = new JMenuItem(item.getText());
+        header.setEnabled(false);
+        header.setFont(UIManager.getFont("defaultFont").deriveFont(Font.BOLD, 11f));
+        sub.add(header);
+        lastWasSeparator = true; // treat as separator to avoid doubles
       } else {
         ActionListener[] listeners = item.getActionListeners();
         sub.addItem(item.getText(), item.getAccelerator(),
