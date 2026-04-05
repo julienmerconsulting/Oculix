@@ -302,6 +302,7 @@ public class SikulixIDE extends JFrame {
     initSidebarNavigation();
     sidebar.initFooter(Commons.getSXVersionShort(), null);
     ideContainer.add(sidebar, BorderLayout.WEST);
+    updateScriptDependentItems(); // grey out Run/Capture/Record until a script is open
     Debug.log("IDE: Putting all together - after sidebar");
 
     // Phase 1a: migrate accelerators from JMenuBar to rootPane
@@ -470,28 +471,31 @@ public class SikulixIDE extends JFrame {
     sidebar.initNavigation(fileSub, editSub, runSub, toolsSub, helpSub);
   }
 
+  // Items that require an open script to be functional
+  private java.util.List<JMenuItem> scriptDependentItems = new ArrayList<>();
+
   private SidebarSubmenu buildRunSubmenu() {
     SidebarSubmenu sub = new SidebarSubmenu();
     int scMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
-    sub.addItem("\u25B6  " + _I("menuRunRun"),
+    scriptDependentItems.add(sub.addItem("\u25B6  " + _I("menuRunRun"),
         KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, scMask),
-        e -> btnRun.runCurrentScript());
-    sub.addItem("\u25B6  " + _I("menuRunRunAndShowActions"),
+        e -> btnRun.runCurrentScript()));
+    scriptDependentItems.add(sub.addItem("\u25B6  " + _I("menuRunRunAndShowActions"),
         KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, InputEvent.ALT_DOWN_MASK | scMask),
-        e -> btnRunSlow.runCurrentScript());
+        e -> btnRunSlow.runCurrentScript()));
     sub.addSeparator();
-    sub.addItem("\u25B6  Run selection",
+    scriptDependentItems.add(sub.addItem("\u25B6  Run selection",
         KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, InputEvent.SHIFT_DOWN_MASK | scMask),
-        e -> getCurrentCodePane().runSelection());
+        e -> getCurrentCodePane().runSelection()));
     return sub;
   }
 
   private SidebarSubmenu buildToolsSubmenu() {
     SidebarSubmenu sub = new SidebarSubmenu();
-    sub.addItem("\uD83D\uDCF7  Capture", null,
-        e -> btnCapture.captureWithAutoDelay());
-    sub.addItem("\uD83D\uDD34  Record", null,
-        e -> btnRecord.actionPerformed(e));
+    scriptDependentItems.add(sub.addItem("\uD83D\uDCF7  Capture", null,
+        e -> btnCapture.captureWithAutoDelay()));
+    scriptDependentItems.add(sub.addItem("\uD83D\uDD34  Record", null,
+        e -> btnRecord.actionPerformed(e)));
     sub.addSeparator();
     // Add items from the existing _toolMenu (Extensions, etc.)
     if (_toolMenu != null) {
@@ -505,6 +509,13 @@ public class SikulixIDE extends JFrame {
       }
     }
     return sub;
+  }
+
+  private void updateScriptDependentItems() {
+    boolean hasScript = !contexts.isEmpty();
+    for (JMenuItem item : scriptDependentItems) {
+      item.setEnabled(hasScript);
+    }
   }
 
   private SidebarSubmenu buildSubmenuFrom(JMenu sourceMenu) {
@@ -595,6 +606,7 @@ public class SikulixIDE extends JFrame {
       }
       tabs.addTab("Welcome", welcomeTab);
       welcomeShowing = true;
+      updateScriptDependentItems();
     }
   }
 
@@ -605,6 +617,7 @@ public class SikulixIDE extends JFrame {
         tabs.removeTabAt(idx);
       }
       welcomeShowing = false;
+      updateScriptDependentItems();
     }
   }
   //</editor-fold>
