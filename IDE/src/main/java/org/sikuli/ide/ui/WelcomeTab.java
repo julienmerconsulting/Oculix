@@ -27,6 +27,7 @@ public class WelcomeTab extends JPanel {
     this.onOpen = onOpen;
     setLayout(new MigLayout("fill, wrap 1", "[center]", "push[]20[]20[]20[]push"));
     setOpaque(true);
+    setBackground(UIManager.getColor("Panel.background"));
     buildUI();
   }
 
@@ -71,25 +72,6 @@ public class WelcomeTab extends JPanel {
     quickStartPanel.add(createActionLink("\uD83D\uDCC2  Open Script", "Ctrl+O", onOpen));
 
     add(quickStartPanel);
-
-    // System Status section
-    JPanel statusPanel = new JPanel(new MigLayout("wrap 2, insets 16 40 16 40, gap 8", "[][grow]"));
-    statusPanel.setOpaque(false);
-    statusPanel.setBorder(BorderFactory.createCompoundBorder(
-        BorderFactory.createLineBorder(UIManager.getColor("Separator.foreground"), 1),
-        BorderFactory.createEmptyBorder(16, 16, 16, 16)));
-
-    JLabel statusLabel = new JLabel("Status");
-    statusLabel.setFont(UIManager.getFont("h3.font"));
-    statusPanel.add(statusLabel, "span 2, gapbottom 8");
-
-    statusPanel.add(new JLabel("Java"));
-    statusPanel.add(new JLabel(String.valueOf(Commons.getJavaVersion())));
-
-    statusPanel.add(new JLabel("Version"));
-    statusPanel.add(new JLabel(Commons.getSXVersionShort()));
-
-    add(statusPanel);
 
     // Version footer
     JLabel versionFooter = new JLabel("v" + Commons.getSXVersionShort() + " — MIT License");
