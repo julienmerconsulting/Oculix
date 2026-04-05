@@ -2011,6 +2011,14 @@ public class SikulixIDE extends JFrame {
     return createMenuItem(item, shortcut, listener);
   }
 
+  /** Creates a disabled menu item used as a section header label. */
+  JMenuItem createSectionLabel(String text) {
+    JMenuItem label = new JMenuItem("── " + text + " ──");
+    label.setEnabled(false);
+    label.setFont(UIManager.getFont("defaultFont").deriveFont(Font.BOLD, 11f));
+    return label;
+  }
+
   class MenuAction implements ActionListener {
 
     Method actMethod = null;
@@ -2072,29 +2080,30 @@ public class SikulixIDE extends JFrame {
       _fileMenu.addSeparator();
     }
 
-    // New submenu: Script / Workspace
-    JMenu newMenu = new JMenu(_I("menuFileNew"));
-    newMenu.add(createMenuItem("Script",
+    // ── Nouveau ──
+    _fileMenu.add(createSectionLabel(_I("menuFileNew")));
+    _fileMenu.add(createMenuItem("\uD83D\uDCC4  Script",
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, scMask),
             new FileAction(FileAction.NEW)));
-    newMenu.add(createMenuItem("Workspace",
+    _fileMenu.add(createMenuItem("\uD83D\uDCC1  Workspace",
             null,
             e -> openNewWorkspaceDialog()));
-    _fileMenu.add(newMenu);
 
-    // Open submenu: Script / Workspace
-    JMenu openMenu = new JMenu(_I("menuFileOpen"));
-    openMenu.add(createMenuItem("Script",
+    // ── Ouvrir ──
+    _fileMenu.add(createSectionLabel(_I("menuFileOpen")));
+    _fileMenu.add(createMenuItem("\uD83D\uDCC4  Script",
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O, scMask),
             new FileAction(FileAction.OPEN)));
-    openMenu.add(createMenuItem("Workspace",
+    _fileMenu.add(createMenuItem("\uD83D\uDCC1  Workspace",
             null,
             e -> openExistingWorkspace()));
-    _fileMenu.add(openMenu);
 
     recentMenu = new JMenu(_I("menuRecent"));
     _fileMenu.add(recentMenu);
 
+    _fileMenu.addSeparator();
+
+    // ── Enregistrer ──
     jmi = _fileMenu.add(createMenuItem(_I("menuFileSave"),
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, scMask),
             new FileAction(FileAction.SAVE)));
@@ -2110,6 +2119,8 @@ public class SikulixIDE extends JFrame {
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_E,
                     InputEvent.SHIFT_DOWN_MASK | scMask),
             new FileAction(FileAction.EXPORT)));
+
+    _fileMenu.addSeparator();
 
     jmi = _fileMenu.add(createMenuItem(_I("menuFileCloseTab"),
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W, scMask),
