@@ -30,6 +30,7 @@ import org.sikuli.support.gui.SXDialog;
 import org.sikuli.support.recorder.actions.IRecordedAction;
 import org.sikuli.util.*;
 import org.sikuli.ide.ui.OculixSidebar;
+import org.sikuli.ide.ui.ScriptExplorer;
 import org.sikuli.ide.ui.SidebarSubmenu;
 import org.sikuli.ide.ui.WelcomeTab;
 
@@ -268,24 +269,33 @@ public class SikulixIDE extends JFrame {
       initMessageArea();
     }
     Debug.log("IDE: creating combined work window");
-    JPanel codePane = new JPanel(new BorderLayout(10, 10));
-    codePane.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 0));
+    JPanel codePane = new JPanel(new BorderLayout(0, 0));
+    codePane.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
     codePane.add(tabs, BorderLayout.CENTER);
+
+    // Script file explorer (left of editor)
+    Debug.log("IDE: creating file explorer");
+    explorer = new ScriptExplorer();
+
+    // Explorer + Editor in a horizontal split
+    JSplitPane editorSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, explorer, codePane);
+    editorSplit.setDividerLocation(180);
+    editorSplit.setResizeWeight(0.0); // editor gets all extra space
+    editorSplit.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+    editorSplit.setOneTouchExpandable(true);
 
     Debug.log("IDE: Putting all together");
     JPanel editPane = new JPanel(new BorderLayout(0, 0));
     mainPane = null;
     if (messageArea != null) {
-      if (prefs.getPrefMoreMessage() == PreferencesUser.VERTICAL) {
-        mainPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, codePane, messageArea);
-      } else {
-        mainPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, codePane, messageArea);
-      }
-      mainPane.setResizeWeight(0.6);
+      // Console always at the bottom (Eclipse-style)
+      mainPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editorSplit, messageArea);
+      mainPane.setResizeWeight(0.75);
       mainPane.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+      mainPane.setOneTouchExpandable(true);
       editPane.add(mainPane, BorderLayout.CENTER);
     } else {
-      editPane.add(codePane, BorderLayout.CENTER);
+      editPane.add(editorSplit, BorderLayout.CENTER);
     }
 
     ideContainer.add(editPane, BorderLayout.CENTER);
@@ -564,6 +574,7 @@ public class SikulixIDE extends JFrame {
 
   private SikuliIDEStatusBar _status;
   private OculixSidebar sidebar;
+  private ScriptExplorer explorer;
 
   private JSplitPane mainPane;
 
@@ -610,6 +621,9 @@ public class SikulixIDE extends JFrame {
       updateScriptDependentItems();
       if (sidebar != null) {
         sidebar.updateProjectInfo(null, null);
+      }
+      if (explorer != null) {
+        explorer.setScriptDirectory(null);
       }
     }
   }
@@ -690,9 +704,12 @@ public class SikulixIDE extends JFrame {
       uncollapseMessageArea();
     }
 
-    // Update sidebar project info
+    // Update sidebar project info and explorer
     if (sidebar != null) {
       sidebar.updateProjectInfo(context.getFileName(), context.getFolder());
+    }
+    if (explorer != null) {
+      explorer.setScriptDirectory(context.getFolder());
     }
   }
 
