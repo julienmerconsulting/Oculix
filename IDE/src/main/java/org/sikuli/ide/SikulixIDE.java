@@ -31,6 +31,7 @@ import org.sikuli.support.recorder.actions.IRecordedAction;
 import org.sikuli.util.*;
 import org.sikuli.ide.ui.OculixSidebar;
 import org.sikuli.ide.ui.SidebarSubmenu;
+import org.sikuli.ide.ui.WelcomeTab;
 
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
@@ -338,12 +339,14 @@ public class SikulixIDE extends JFrame {
     });
     ToolTipManager.sharedInstance().setDismissDelay(30000);
 
-    createEmptyScriptContext();
     if (messages != null) {
       messages.initRedirect();
     }
     Debug.log("IDE: Putting all together - Restore last Session");
-    restoreSession();
+    List<File> restored = restoreSession();
+    if (restored.isEmpty()) {
+      showWelcomeTab();
+    }
 
     initShortcutKeys();
     ideIsReady.set(true);
@@ -528,6 +531,32 @@ public class SikulixIDE extends JFrame {
   }
 
   private CloseableTabbedPane tabs;
+  private WelcomeTab welcomeTab;
+  private boolean welcomeShowing = false;
+
+  void showWelcomeTab() {
+    if (!welcomeShowing && tabs.getTabCount() == 0) {
+      if (welcomeTab == null) {
+        welcomeTab = new WelcomeTab(
+            e -> { hideWelcomeTab(); createEmptyScriptContext(); },
+            e -> { hideWelcomeTab(); File f = selectFileToOpen(); if (f != null) createFileContext(f); }
+        );
+        welcomeTab.putClientProperty("isClosable", false);
+      }
+      tabs.addTab("Welcome", welcomeTab);
+      welcomeShowing = true;
+    }
+  }
+
+  void hideWelcomeTab() {
+    if (welcomeShowing && welcomeTab != null) {
+      int idx = tabs.indexOfComponent(welcomeTab);
+      if (idx >= 0) {
+        tabs.removeTabAt(idx);
+      }
+      welcomeShowing = false;
+    }
+  }
   //</editor-fold>
 
   //<editor-fold desc="03 PaneContext">
@@ -1841,10 +1870,7 @@ public class SikulixIDE extends JFrame {
     jmi.setName("OPEN");
 
     recentMenu = new JMenu(_I("menuRecent"));
-
-    if (Settings.experimental) {
-      _fileMenu.add(recentMenu);
-    }
+    _fileMenu.add(recentMenu);
 
     jmi = _fileMenu.add(createMenuItem(_I("menuFileSave"),
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, scMask),
@@ -1862,15 +1888,6 @@ public class SikulixIDE extends JFrame {
                     InputEvent.SHIFT_DOWN_MASK | scMask),
             new FileAction(FileAction.EXPORT)));
 
-    _fileMenu.add(createMenuItem("Export as jar",
-            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_J, scMask),
-            new FileAction(FileAction.ASJAR)));
-
-    _fileMenu.add(createMenuItem("Export as runnable jar",
-            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_J,
-                    InputEvent.SHIFT_DOWN_MASK | scMask),
-            new FileAction(FileAction.ASRUNJAR)));
-
     jmi = _fileMenu.add(createMenuItem(_I("menuFileCloseTab"),
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W, scMask),
             new FileAction(FileAction.CLOSE_TAB)));
@@ -1882,19 +1899,6 @@ public class SikulixIDE extends JFrame {
               KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_P, scMask),
               new FileAction(FileAction.PREFERENCES)));
     }
-
-    _fileMenu.addSeparator();
-    _fileMenu.add(createMenuItem("Open Special Files",
-            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O, InputEvent.ALT_DOWN_MASK | scMask),
-            new FileAction(FileAction.OPEN_SPECIAL)));
-
-//TODO restart IDE
-/*
-    _fileMenu.add(createMenuItem("Restart IDE",
-            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R,
-                    InputEvent.SHIFT_DOWN_MASK | InputEvent.ALT_DOWN_MASK),
-            new FileAction(FileAction.RESTART)));
-*/
     if (IDEDesktopSupport.showQuit) {
       _fileMenu.addSeparator();
       _fileMenu.add(createMenuItem(_I("menuFileQuit"),
@@ -2211,7 +2215,7 @@ public class SikulixIDE extends JFrame {
     }
 
     private boolean _find(String str, int begin, boolean forward) {
-      if (str == "!") {
+      if ("!".equals(str)) {
         return false;
       }
       EditorPane codePane = getCurrentCodePane();
@@ -2446,18 +2450,6 @@ public class SikulixIDE extends JFrame {
     _toolMenu.add(createMenuItem(_I("menuToolExtensions"),
             null,
             new ToolAction(ToolAction.EXTENSIONS)));
-
-    _toolMenu.add(createMenuItem("Pack Jar with Jython",
-            null,
-            new ToolAction(ToolAction.JARWITHJYTHON)));
-
-    _toolMenu.add(createMenuItem("Pack Jar with Jython",
-        null,
-        new ToolAction(ToolAction.JARWITHJYTHON)));
-
-    _toolMenu.add(createMenuItem(_I("menuToolAndroid"),
-            null,
-            new ToolAction(ToolAction.ANDROID)));
   }
 
   class ToolAction extends MenuAction {
@@ -2623,44 +2615,40 @@ public class SikulixIDE extends JFrame {
     _helpMenu.add(createMenuItem(_I("menuHelpBugReport"),
             null, new HelpAction(HelpAction.OPEN_BUG_REPORT)));
 
-//    _helpMenu.add(createMenuItem(_I("menuHelpTranslation"),
-//            null, new HelpAction(HelpAction.OPEN_TRANSLATION)));
     _helpMenu.addSeparator();
     _helpMenu.add(createMenuItem(_I("menuHelpHomepage"),
             null, new HelpAction(HelpAction.OPEN_HOMEPAGE)));
-
-//    _helpMenu.addSeparator();
-//    _helpMenu.add(createMenuItem("SikuliX1 Downloads",
-//        null, new HelpAction(HelpAction.OPEN_DOWNLOADS)));
-//    _helpMenu.add(createMenuItem(_I("menuHelpCheckUpdate"),
-//        null, new HelpAction(HelpAction.CHECK_UPDATE)));
+    _helpMenu.addSeparator();
+    _helpMenu.add(createMenuItem(_I("menuHelpCheckUpdate"),
+            null, new HelpAction(HelpAction.CHECK_UPDATE)));
   }
 
   private void lookUpdate() {
     newBuildAvailable = null;
-    String token = "This version was built at ";
-    String httpDownload = "#https://raiman.github.io/SikuliX1/downloads.html";
-    String pageDownload = FileManager.downloadURLtoString(httpDownload);
-    if (!pageDownload.isEmpty()) {
-      newBuildAvailable = false;
-    }
-    int locStamp = pageDownload.indexOf(token);
-    if (locStamp > 0) {
-      locStamp += token.length();
-      String latestBuildFull = pageDownload.substring(locStamp, locStamp + 16);
-      String latestBuild = latestBuildFull.replaceAll("-", "").replace("_", "").replace(":", "");
-      String actualBuild = Commons.getSxBuildStamp();
-      try {
-        long lb = Long.parseLong(latestBuild);
-        long ab = Long.parseLong(actualBuild);
-        if (lb > ab) {
-          newBuildAvailable = true;
-          newBuildStamp = latestBuildFull;
+    try {
+      String apiUrl = "https://api.github.com/repos/oculix-org/Oculix/releases/latest";
+      String response = FileManager.downloadURLtoString(apiUrl);
+      if (response != null && !response.isEmpty()) {
+        // Parse tag_name from JSON response (simple extraction)
+        int tagIdx = response.indexOf("\"tag_name\"");
+        if (tagIdx > 0) {
+          int valueStart = response.indexOf("\"", tagIdx + 11) + 1;
+          int valueEnd = response.indexOf("\"", valueStart);
+          String latestTag = response.substring(valueStart, valueEnd);
+          // Remove leading 'v' if present
+          String latestVersion = latestTag.startsWith("v") ? latestTag.substring(1) : latestTag;
+          String currentVersion = Commons.getSXVersionShort();
+          log("Check update: latest=%s current=%s", latestVersion, currentVersion);
+          if (!latestVersion.equals(currentVersion)) {
+            newBuildAvailable = true;
+            newBuildStamp = latestVersion;
+          } else {
+            newBuildAvailable = false;
+          }
         }
-        log("latest build: %s this build: %s (newer: %s)", latestBuild, actualBuild, newBuildAvailable);
-      } catch (NumberFormatException e) {
-        log("check for new build: stamps not readable");
       }
+    } catch (Exception e) {
+      log("Check update failed: %s", e.getMessage());
     }
   }
 
