@@ -4,7 +4,6 @@
 package org.sikuli.ide.ui.recorder;
 
 import net.miginfocom.swing.MigLayout;
-import org.sikuli.ide.SikulixIDE;
 import org.sikuli.script.*;
 import org.sikuli.support.recorder.PatternValidator;
 import org.sikuli.support.recorder.generators.JythonCodeGenerator;
@@ -496,19 +495,24 @@ public class RecorderAssistant extends JDialog {
     Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, null);
 
     workflow.dispose();
-    SikulixIDE ide = (SikulixIDE) getOwner();
-    ide.setVisible(true); // Restore IDE
-
-    if (choice == 1) {
-      // New script
-      ide.createEmptyScriptContext();
-    }
+    getOwner().setVisible(true); // Restore IDE
 
     // Auto-paste into editor
     java.awt.EventQueue.invokeLater(() -> {
       try {
-        // Simulate Ctrl+V to paste into the active editor
         java.awt.Robot robot = new java.awt.Robot();
+
+        if (choice == 1) {
+          // Ctrl+N to create new script
+          robot.keyPress(java.awt.event.KeyEvent.VK_CONTROL);
+          robot.keyPress(java.awt.event.KeyEvent.VK_N);
+          robot.keyRelease(java.awt.event.KeyEvent.VK_N);
+          robot.keyRelease(java.awt.event.KeyEvent.VK_CONTROL);
+          // Small delay for new tab to open
+          Thread.sleep(500);
+        }
+
+        // Ctrl+V to paste
         robot.keyPress(java.awt.event.KeyEvent.VK_CONTROL);
         robot.keyPress(java.awt.event.KeyEvent.VK_V);
         robot.keyRelease(java.awt.event.KeyEvent.VK_V);
