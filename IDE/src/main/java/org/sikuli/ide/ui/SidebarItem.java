@@ -31,7 +31,7 @@ public class SidebarItem extends JButton {
     setBorderPainted(false);
     setContentAreaFilled(false);
     setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-    setFont(UIManager.getFont("defaultFont").deriveFont(12.0f));
+    setFont(UIManager.getFont("defaultFont").deriveFont(14.0f));
     putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
 
     if (action != null) {

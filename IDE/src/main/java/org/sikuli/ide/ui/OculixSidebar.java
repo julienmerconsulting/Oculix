@@ -119,22 +119,19 @@ public class OculixSidebar extends JPanel {
 
     // ── SCRIPT section ──
     addSectionHeader("SCRIPT");
-    navFile = new SidebarItem(_I("menuFile") + "  \u25B8",
-        loadIcon("/icons/insert-image-icon.png", 16));
+    navFile = new SidebarItem("\uD83D\uDCC1  " + _I("menuFile") + "  \u25B8", null);
     navFile.setMnemonic(java.awt.event.KeyEvent.VK_F);
     mainPanel.add(navFile);
-    navEdit = new SidebarItem(_I("menuEdit") + "  \u25B8", null);
+    navEdit = new SidebarItem("\u270F\uFE0F  " + _I("menuEdit") + "  \u25B8", null);
     navEdit.setMnemonic(java.awt.event.KeyEvent.VK_E);
     mainPanel.add(navEdit);
-    navRun = new SidebarItem(_I("menuRun") + "  \u25B8",
-        loadIcon("/icons/run_big_green.png", 16));
+    navRun = new SidebarItem("\u25B6\uFE0F  " + _I("menuRun") + "  \u25B8", null);
     navRun.setMnemonic(java.awt.event.KeyEvent.VK_R);
     mainPanel.add(navRun);
 
     // ── TOOLS section ──
     addSectionHeader("TOOLS");
-    navTools = new SidebarItem(_I("menuTool") + "  \u25B8",
-        loadIcon("/icons/capture-small.png", 16));
+    navTools = new SidebarItem("\uD83D\uDD27  " + _I("menuTool") + "  \u25B8", null);
     navTools.setMnemonic(java.awt.event.KeyEvent.VK_T);
     mainPanel.add(navTools);
 
@@ -164,7 +161,7 @@ public class OculixSidebar extends JPanel {
 
     // ── HELP section ──
     addSectionHeader("HELP");
-    navHelp = new SidebarItem(_I("menuHelp") + "  \u25B8", null);
+    navHelp = new SidebarItem("\u2753  " + _I("menuHelp") + "  \u25B8", null);
     navHelp.setMnemonic(java.awt.event.KeyEvent.VK_H);
     mainPanel.add(navHelp);
 
