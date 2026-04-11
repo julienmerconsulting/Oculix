@@ -587,23 +587,7 @@ public class SikulixIDE extends JFrame {
     scriptDependentItems.add(sub.addItem("\uD83D\uDD34  Record", null,
         e -> btnRecord.actionPerformed(e)));
     scriptDependentItems.add(sub.addItem("\uD83D\uDFE2  Modern Recorder (beta)", null,
-        e -> {
-          try {
-            com.sikulix.ocr.OCREngine ocr = new com.sikulix.ocr.PaddleOCREngine();
-            if (!ocr.isAvailable()) {
-              javax.swing.JOptionPane.showMessageDialog(SikulixIDE.this,
-                  "PaddleOCR server is not running.\nStart it first: pip install paddlepaddle paddleocr",
-                  "Modern Recorder", javax.swing.JOptionPane.WARNING_MESSAGE);
-              return;
-            }
-          } catch (Exception ex) {
-            javax.swing.JOptionPane.showMessageDialog(SikulixIDE.this,
-                "PaddleOCR check failed: " + ex.getMessage(),
-                "Modern Recorder", javax.swing.JOptionPane.WARNING_MESSAGE);
-            return;
-          }
-          new org.sikuli.ide.ui.recorder.RecorderAssistant(SikulixIDE.this).setVisible(true);
-        }));
+        e -> new org.sikuli.ide.ui.recorder.RecorderAssistant(SikulixIDE.this).setVisible(true)));
     sub.addSeparator();
     // Add items from the existing _toolMenu (Extensions, etc.)
     if (_toolMenu != null) {
