@@ -96,6 +96,30 @@
       <artifactId>commons-io</artifactId>
       <version>2.8.0</version>
     </dependency>
+    <!-- FlatLaf modern Look & Feel -->
+    <dependency>
+      <groupId>com.formdev</groupId>
+      <artifactId>flatlaf</artifactId>
+      <version>3.7.1</version>
+    </dependency>
+    <!-- DJ-Raven : modal dialogs, toasts, animations -->
+    <dependency>
+      <groupId>io.github.dj-raven</groupId>
+      <artifactId>modal-dialog</artifactId>
+      <version>2.6.1</version>
+    </dependency>
+    <!-- DJ-Raven : modern swing components -->
+    <dependency>
+      <groupId>io.github.dj-raven</groupId>
+      <artifactId>swing-pack</artifactId>
+      <version>1.0.1</version>
+    </dependency>
+    <!-- MigLayout : modern layout manager -->
+    <dependency>
+      <groupId>com.miglayout</groupId>
+      <artifactId>miglayout-swing</artifactId>
+      <version>11.4.3</version>
+    </dependency>
   </dependencies>
 
   <profiles>

@@ -15,6 +15,9 @@ import org.sikuli.support.RunTime;
 import org.sikuli.support.gui.SXDialog;
 import org.sikuli.support.ide.SikuliIDEI18N;
 
+import com.formdev.flatlaf.FlatDarkLaf;
+import com.formdev.flatlaf.FlatLaf;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.lang.reflect.Method;
@@ -105,6 +108,12 @@ public class Sikulix {
     Commons.startLog(1, "IDE starting (%4.1f)", Commons.getSinceStart());
     //endregion
 
+    // FlatLaf must be initialized before any Swing component creation
+    // Use modern system fonts: Segoe UI (Win), SF Pro (Mac), Inter/Cantarell (Linux)
+    FlatLaf.setPreferredFontFamily("Segoe UI");
+    FlatLaf.setPreferredMonospacedFontFamily("Cascadia Code");
+    FlatDarkLaf.setup();
+
     ideSplash = new SXDialog("sxidestartup", SikulixIDE.getWindowTop(), SXDialog.POSITION.TOP);
     ideSplash.run();
 
@@ -170,12 +179,7 @@ public class Sikulix {
     Commons.setIDETemp(ideTemp);
     //endregion
 
-    if (Commons.runningMac()) {
-      try {
-        System.setProperty("apple.laf.useScreenMenuBar", "true");
-      } catch (Exception e) {
-      }
-    }
+    // apple.laf.useScreenMenuBar removed — FlatLaf handles macOS menu integration natively
 
     SikulixIDE.start();
 

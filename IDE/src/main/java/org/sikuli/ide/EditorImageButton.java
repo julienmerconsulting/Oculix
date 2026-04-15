@@ -4,6 +4,7 @@
 package org.sikuli.ide;
 
 import org.apache.commons.io.FilenameUtils;
+import org.sikuli.basics.PreferencesUser;
 import org.sikuli.support.ide.IButton;
 import org.sikuli.script.Location;
 import org.sikuli.script.Pattern;
@@ -39,7 +40,15 @@ public class EditorImageButton extends JButton implements ActionListener, Serial
     return ((File) options.get(IButton.FILE)).getAbsolutePath();
   }
 
-  int MAXHEIGHT = 20;
+  int MAXHEIGHT = getThumbHeight();
+
+  private static int getThumbHeight() {
+    try {
+      return PreferencesUser.get().getDefaultThumbHeight();
+    } catch (Exception e) {
+      return 50; // fallback
+    }
+  }
 
   BufferedImage thumbnail;
 
@@ -203,6 +212,9 @@ public class EditorImageButton extends JButton implements ActionListener, Serial
 
   @Override
   public String toString() {
+    if (options == null || options.get(IButton.TEXT) == null) {
+      return "";
+    }
     return (String) options.get(IButton.TEXT);
   }
 

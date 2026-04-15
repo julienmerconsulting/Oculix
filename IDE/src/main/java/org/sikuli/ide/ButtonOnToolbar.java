@@ -3,8 +3,6 @@
  */
 package org.sikuli.ide;
 
-import com.explodingpixels.macwidgets.plaf.UnifiedToolbarButtonUI;
-
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -18,8 +16,7 @@ public class ButtonOnToolbar extends JButton implements ActionListener {
 
    public ButtonOnToolbar(){
       setBorderPainted(false);
-      putClientProperty("JButton.buttonType", "textured");
-      setUI(new UnifiedToolbarButtonUI());
+      putClientProperty("JButton.buttonType", "toolBarButton");
       setBorder(BorderFactory.createEmptyBorder(3,10,3,10));
    }
 

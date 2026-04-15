@@ -342,7 +342,7 @@ public class SXDialog extends JFrame {
   //endregion
 
   //region 05 global features
-  public Color SXRED = new Color(0x9D, 0x42, 0x30, 208);
+  public Color SXRED = new Color(0x00, 0xA8, 0x9D, 208);
   public Color SXLBLBUTTON = new Color(241, 230, 206);
   public Color SXLBLSELECTED = new Color(167, 192, 220);
   public Color BACKGROUNDCOLOR = Color.WHITE;
@@ -1800,6 +1800,7 @@ public class SXDialog extends JFrame {
         lblText = new UnderlinedLabel(title(), font);
       }
       lblText.setFont(font);
+      lblText.setForeground(SXRED);
       Rectangle r = new Rectangle(0, 0, (int) textLen.getWidth(), (int) textLen.getHeight());
       lblText.setBounds(r);
       dim(r.getSize());
@@ -1923,8 +1924,8 @@ public class SXDialog extends JFrame {
           Exception exception = null;
           Method method;
           try {
-            method = clazz.getMethod(command, null);
-            method.invoke(SXDialog.this, new Class[0]);
+            method = clazz.getMethod(command, (Class<?>[]) null);
+            method.invoke(SXDialog.this, (Object[]) null);
           } catch (NoSuchMethodException noSuchMethodException) {
             error = "not implemented";
             exception = noSuchMethodException;

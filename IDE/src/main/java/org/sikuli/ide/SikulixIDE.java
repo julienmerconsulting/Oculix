@@ -29,6 +29,11 @@ import org.sikuli.support.recorder.generators.ICodeGenerator;
 import org.sikuli.support.gui.SXDialog;
 import org.sikuli.support.recorder.actions.IRecordedAction;
 import org.sikuli.util.*;
+import org.sikuli.ide.ui.OculixSidebar;
+import org.sikuli.ide.ui.ScriptExplorer;
+import org.sikuli.ide.ui.SidebarSubmenu;
+import org.sikuli.ide.ui.WelcomeTab;
+import org.sikuli.ide.ui.WorkspaceDialog;
 
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
@@ -156,7 +161,9 @@ public class SikulixIDE extends JFrame {
 
   static void showAgain() {
     ideWindow.setVisible(true);
-    sikulixIDE.getActiveContext().focus();
+    PaneContext ctx = sikulixIDE.getActiveContext();
+    if (ctx != null) ctx.focus();
+    sikulixIDE.refreshWorkspace(); // refresh card image counts after capture
   }
 
   //TODO showAfterStart to be revised
@@ -264,32 +271,76 @@ public class SikulixIDE extends JFrame {
       initMessageArea();
     }
     Debug.log("IDE: creating combined work window");
-    JPanel codePane = new JPanel(new BorderLayout(10, 10));
-    codePane.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 0));
+    JPanel codePane = new JPanel(new BorderLayout(0, 0));
+    codePane.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
     codePane.add(tabs, BorderLayout.CENTER);
+
+    // Script file explorer (left of editor)
+    Debug.log("IDE: creating file explorer");
+    explorer = new ScriptExplorer();
+    explorer.setOnCardSelected(e -> {
+      int cardIndex = e.getID();
+      int tabIndex = welcomeShowing ? cardIndex + 1 : cardIndex;
+      if (tabIndex >= 0 && tabIndex < tabs.getTabCount()) {
+        tabs.setSelectedIndex(tabIndex);
+      }
+    });
+    explorer.setOnCardRenamed(e -> {
+      int cardIndex = e.getID();
+      String newName = e.getActionCommand();
+      if (cardIndex >= 0 && cardIndex < contexts.size() && newName != null) {
+        // Rename is a save-as with new name — for now just update the tab title
+        PaneContext ctx = contexts.get(cardIndex);
+        int tabIndex = welcomeShowing ? cardIndex + 1 : cardIndex;
+        tabs.setTitleAt(tabIndex, newName);
+        refreshWorkspace();
+      }
+    });
+
+    // Explorer + Editor in a horizontal split
+    JSplitPane editorSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, explorer, codePane);
+    editorSplit.setDividerLocation(180);
+    editorSplit.setResizeWeight(0.0); // editor gets all extra space
+    editorSplit.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, UIManager.getColor("Separator.foreground")));
+    editorSplit.setOneTouchExpandable(true);
 
     Debug.log("IDE: Putting all together");
     JPanel editPane = new JPanel(new BorderLayout(0, 0));
     mainPane = null;
     if (messageArea != null) {
-      if (prefs.getPrefMoreMessage() == PreferencesUser.VERTICAL) {
-        mainPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, codePane, messageArea);
-      } else {
-        mainPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, codePane, messageArea);
-      }
-      mainPane.setResizeWeight(0.6);
+      // Console always at the bottom (Eclipse-style)
+      mainPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editorSplit, messageArea);
+      mainPane.setResizeWeight(0.75);
       mainPane.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+      mainPane.setOneTouchExpandable(true);
       editPane.add(mainPane, BorderLayout.CENTER);
     } else {
-      editPane.add(codePane, BorderLayout.CENTER);
+      editPane.add(editorSplit, BorderLayout.CENTER);
     }
 
     ideContainer.add(editPane, BorderLayout.CENTER);
     Debug.log("IDE: Putting all together - after main pane");
 
+    // Phase 1a: init toolbar (actions are still needed) but don't add to layout
     JToolBar tb = initToolbar();
-    ideContainer.add(tb, BorderLayout.NORTH);
-    Debug.log("IDE: Putting all together - after toolbar");
+    // Phase 1b: JToolBar hidden, actions migrated to sidebar
+    tb.setVisible(false);
+
+    // Phase 1b: Create and configure sidebar
+    Debug.log("IDE: Putting all together - init sidebar");
+    sidebar = new OculixSidebar();
+    initSidebarActions();
+    initSidebarNavigation();
+    sidebar.initFooter(Commons.getSXVersionShort(), null);
+    ideContainer.add(sidebar, BorderLayout.WEST);
+    updateScriptDependentItems(); // grey out Run/Capture/Record until a script is open
+    Debug.log("IDE: Putting all together - after sidebar");
+
+    // Phase 1a: migrate accelerators from JMenuBar to rootPane
+    migrateAcceleratorsToRootPane();
+
+    // Phase 1b: hide JMenuBar (kept as safety net, removed in Phase 3)
+    _menuBar.setVisible(false);
 
     _status = new SikuliIDEStatusBar();
     ideContainer.add(_status, BorderLayout.SOUTH);
@@ -320,12 +371,19 @@ public class SikulixIDE extends JFrame {
     });
     ToolTipManager.sharedInstance().setDismissDelay(30000);
 
-    createEmptyScriptContext();
     if (messages != null) {
       messages.initRedirect();
     }
     Debug.log("IDE: Putting all together - Restore last Session");
-    restoreSession();
+    try {
+      List<File> restored = restoreSession();
+      if (restored.isEmpty() || tabs.getTabCount() == 0) {
+        showWelcomeTab();
+      }
+    } catch (Exception e) {
+      log("Session restore failed: %s", e.getMessage());
+      showWelcomeTab();
+    }
 
     initShortcutKeys();
     ideIsReady.set(true);
@@ -341,7 +399,9 @@ public class SikulixIDE extends JFrame {
     if (sikulixIDE.mainPane != null) {
       sikulixIDE.mainPane.setDividerLocation(0.6); //TODO saved value
     }
-    sikulixIDE.getActiveContext().focus();
+    if (!sikulixIDE.contexts.isEmpty()) {
+      sikulixIDE.getActiveContext().focus();
+    }
   }
 
   //TODO initShortcutKey
@@ -388,21 +448,240 @@ public class SikulixIDE extends JFrame {
     }, AWTEvent.KEY_EVENT_MASK);
   }
 
+  // Phase 1a: Migrate all JMenuItem accelerators to rootPane InputMap/ActionMap
+  // This ensures keyboard shortcuts survive the JMenuBar being hidden.
+  private void migrateAcceleratorsToRootPane() {
+    JRootPane root = ideWindow.getRootPane();
+    InputMap im = root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+    ActionMap am = root.getActionMap();
+    migrateMenuAccelerators(_fileMenu, im, am);
+    migrateMenuAccelerators(_editMenu, im, am);
+    migrateMenuAccelerators(_runMenu, im, am);
+    migrateMenuAccelerators(_viewMenu, im, am);
+    migrateMenuAccelerators(_toolMenu, im, am);
+    migrateMenuAccelerators(_helpMenu, im, am);
+    Debug.log("IDE: Accelerators migrated to rootPane");
+  }
+
+  private void migrateMenuAccelerators(JMenu menu, InputMap im, ActionMap am) {
+    if (menu == null) return;
+    for (int i = 0; i < menu.getItemCount(); i++) {
+      JMenuItem item = menu.getItem(i);
+      if (item == null) continue; // separators
+      if (item instanceof JMenu) {
+        migrateMenuAccelerators((JMenu) item, im, am);
+      } else if (item.getAccelerator() != null) {
+        KeyStroke ks = item.getAccelerator();
+        String actionKey = "sidebar_" + menu.getText() + "_" + item.getText();
+        im.put(ks, actionKey);
+        final JMenuItem menuItem = item;
+        am.put(actionKey, new AbstractAction() {
+          @Override
+          public void actionPerformed(ActionEvent e) {
+            for (ActionListener al : menuItem.getActionListeners()) {
+              al.actionPerformed(new ActionEvent(menuItem, ActionEvent.ACTION_PERFORMED, menuItem.getActionCommand()));
+            }
+          }
+        });
+      }
+    }
+  }
+
+  // Phase 1b: init sidebar navigation items
+  private void initSidebarActions() {
+    sidebar.initNavItems();
+  }
+
+  // Phase 1b: build sidebar submenus from existing menu actions
+  private void initSidebarNavigation() {
+    SidebarSubmenu fileSub = buildFileSubmenu();
+    SidebarSubmenu editSub = buildSubmenuFrom(_editMenu);
+    SidebarSubmenu runSub = buildRunSubmenu();
+    SidebarSubmenu toolsSub = buildToolsSubmenu();
+    SidebarSubmenu helpSub = buildSubmenuFrom(_helpMenu);
+    sidebar.initNavigation(fileSub, editSub, runSub, toolsSub, helpSub);
+  }
+
+  // Items that require an open script to be functional
+  private java.util.List<JMenuItem> scriptDependentItems = new ArrayList<>();
+
+  private SidebarSubmenu buildFileSubmenu() {
+    SidebarSubmenu sub = new SidebarSubmenu();
+    int scMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+
+    // ── Nouveau ──
+    JMenuItem newHeader = new JMenuItem("\u2500\u2500 " + _I("menuFileNew") + " \u2500\u2500");
+    newHeader.setEnabled(false);
+    newHeader.setFont(UIManager.getFont("defaultFont").deriveFont(Font.BOLD, 11f));
+    sub.add(newHeader);
+    sub.addItem("\uD83D\uDCC4  Script",
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, scMask),
+        e -> { createEmptyScriptContext(); });
+    sub.addItem("\uD83D\uDCC1  Workspace", null,
+        e -> openNewWorkspaceDialog());
+
+    // ── Ouvrir ──
+    JMenuItem openHeader = new JMenuItem("\u2500\u2500 " + _I("menuFileOpen") + " \u2500\u2500");
+    openHeader.setEnabled(false);
+    openHeader.setFont(UIManager.getFont("defaultFont").deriveFont(Font.BOLD, 11f));
+    sub.add(openHeader);
+    sub.addItem("\uD83D\uDCC4  Script",
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O, scMask),
+        e -> { File f = selectFileToOpen(); if (f != null) createFileContext(f); });
+    sub.addItem("\uD83D\uDCC1  Workspace", null,
+        e -> openExistingWorkspace());
+
+    sub.addSeparator();
+
+    // Enregistrer
+    scriptDependentItems.add(sub.addItem(_I("menuFileSave"),
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, scMask),
+        e -> { PaneContext ctx = getActiveContext(); if (ctx != null) ctx.save(); }));
+    scriptDependentItems.add(sub.addItem(_I("menuFileSaveAs"),
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, InputEvent.SHIFT_DOWN_MASK | scMask),
+        e -> { PaneContext ctx = getActiveContext(); if (ctx != null) ctx.saveAs(); }));
+    scriptDependentItems.add(sub.addItem(_I("menuFileExport"),
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_E, InputEvent.SHIFT_DOWN_MASK | scMask),
+        e -> { exportAsZip(); }));
+
+    sub.addSeparator();
+
+    scriptDependentItems.add(sub.addItem(_I("menuFileCloseTab"),
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W, scMask),
+        e -> { PaneContext ctx = getActiveContext(); if (ctx != null) ctx.close(); }));
+
+    sub.addSeparator();
+
+    sub.addItem(_I("menuFilePreferences"),
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_P, scMask),
+        e -> showPreferencesWindow());
+
+    sub.addSeparator();
+
+    sub.addItem(_I("menuFileQuit"), null,
+        e -> terminate());
+
+    return sub;
+  }
+
+  private SidebarSubmenu buildRunSubmenu() {
+    SidebarSubmenu sub = new SidebarSubmenu();
+    int scMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+    scriptDependentItems.add(sub.addItem("\u25B6  " + _I("menuRunRun"),
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, scMask),
+        e -> btnRun.runCurrentScript()));
+    scriptDependentItems.add(sub.addItem("\u25B6  " + _I("menuRunRunAndShowActions"),
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, InputEvent.ALT_DOWN_MASK | scMask),
+        e -> btnRunSlow.runCurrentScript()));
+    sub.addSeparator();
+    scriptDependentItems.add(sub.addItem("\u25B6  Run selection",
+        KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R, InputEvent.SHIFT_DOWN_MASK | scMask),
+        e -> getCurrentCodePane().runSelection()));
+    return sub;
+  }
+
+  private SidebarSubmenu buildToolsSubmenu() {
+    SidebarSubmenu sub = new SidebarSubmenu();
+    scriptDependentItems.add(sub.addItem("\uD83D\uDCF7  Capture", null,
+        e -> btnCapture.captureWithAutoDelay()));
+    scriptDependentItems.add(sub.addItem("\uD83D\uDD34  Record", null,
+        e -> btnRecord.actionPerformed(e)));
+    scriptDependentItems.add(sub.addItem("\uD83D\uDFE2  Modern Recorder (beta)", null,
+        e -> new org.sikuli.ide.ui.recorder.RecorderAssistant(SikulixIDE.this).setVisible(true)));
+    sub.addSeparator();
+    // Add items from the existing _toolMenu (Extensions, etc.)
+    if (_toolMenu != null) {
+      for (int i = 0; i < _toolMenu.getItemCount(); i++) {
+        JMenuItem item = _toolMenu.getItem(i);
+        if (item != null) {
+          ActionListener[] listeners = item.getActionListeners();
+          sub.addItem(item.getText(), item.getAccelerator(),
+              listeners.length > 0 ? listeners[0] : null);
+        }
+      }
+    }
+    return sub;
+  }
+
+  private void updateScriptDependentItems() {
+    boolean hasScript = !contexts.isEmpty();
+    for (JMenuItem item : scriptDependentItems) {
+      item.setEnabled(hasScript);
+    }
+  }
+
+  private SidebarSubmenu buildSubmenuFrom(JMenu sourceMenu) {
+    SidebarSubmenu sub = new SidebarSubmenu();
+    if (sourceMenu == null) return sub;
+    boolean lastWasSeparator = true; // avoid leading separator
+    for (int i = 0; i < sourceMenu.getItemCount(); i++) {
+      JMenuItem item = sourceMenu.getItem(i);
+      if (item == null) {
+        // separator — skip duplicates
+        if (!lastWasSeparator) {
+          sub.addSeparator();
+          lastWasSeparator = true;
+        }
+      } else if (item instanceof JMenu) {
+        // Nested menu (e.g., Find submenu, Recent) — flatten into submenu
+        JMenu nested = (JMenu) item;
+        if (nested.getItemCount() == 0) continue; // skip empty menus like Recent
+        if (!lastWasSeparator) {
+          sub.addSeparator();
+          lastWasSeparator = true;
+        }
+        for (int j = 0; j < nested.getItemCount(); j++) {
+          JMenuItem nestedItem = nested.getItem(j);
+          if (nestedItem != null) {
+            ActionListener[] listeners = nestedItem.getActionListeners();
+            sub.addItem(nestedItem.getText(), nestedItem.getAccelerator(),
+                listeners.length > 0 ? listeners[0] : null);
+            lastWasSeparator = false;
+          }
+        }
+      } else if (!item.isEnabled()) {
+        // Section header label (disabled bold item) — reproduce in submenu
+        JMenuItem header = new JMenuItem(item.getText());
+        header.setEnabled(false);
+        header.setFont(UIManager.getFont("defaultFont").deriveFont(Font.BOLD, 11f));
+        sub.add(header);
+        lastWasSeparator = true; // treat as separator to avoid doubles
+      } else {
+        ActionListener[] listeners = item.getActionListeners();
+        sub.addItem(item.getText(), item.getAccelerator(),
+            listeners.length > 0 ? listeners[0] : null);
+        lastWasSeparator = false;
+      }
+    }
+    return sub;
+  }
+
   static SikuliIDEStatusBar getStatusbar() {
     return sikulixIDE._status;
   }
 
   private SikuliIDEStatusBar _status;
+  private OculixSidebar sidebar;
+  private ScriptExplorer explorer;
 
   private JSplitPane mainPane;
 
   private void initTabs() {
     tabs = new CloseableTabbedPane();
-    tabs.setUI(new AquaCloseableTabbedPaneUI());
-    tabs.addCloseableTabbedPaneListener(tabIndexToClose -> {
-      getContextAt(tabIndexToClose).close();
-      return false;
-    });
+    // Phase 1c: Use FlatLaf native closeable tabs
+    tabs.putClientProperty("JTabbedPane.tabClosable", true);
+    tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", "Close");
+    tabs.putClientProperty("JTabbedPane.tabCloseCallback",
+        (java.util.function.BiConsumer<JTabbedPane, Integer>) (tabbedPane, tabIndex) -> {
+          // Check if this is the welcome tab (not a script context)
+          Component comp = tabbedPane.getComponentAt(tabIndex);
+          if (comp instanceof WelcomeTab) return;
+          // Account for welcome tab offset
+          int contextIndex = welcomeShowing ? tabIndex - 1 : tabIndex;
+          if (contextIndex >= 0 && contextIndex < contexts.size()) {
+            getContextAt(contextIndex).close();
+          }
+        });
     tabs.addChangeListener(e -> {
       JTabbedPane tab = (JTabbedPane) e.getSource();
       int ix = tab.getSelectedIndex();
@@ -415,6 +694,40 @@ public class SikulixIDE extends JFrame {
   }
 
   private CloseableTabbedPane tabs;
+  private WelcomeTab welcomeTab;
+  private boolean welcomeShowing = false;
+
+  void showWelcomeTab() {
+    if (!welcomeShowing && tabs.getTabCount() == 0) {
+      if (welcomeTab == null) {
+        welcomeTab = new WelcomeTab(
+            e -> { hideWelcomeTab(); createEmptyScriptContext(); },
+            e -> { File f = selectFileToOpen(); if (f != null) createFileContext(f); },
+            e -> openNewWorkspaceDialog(),
+            e -> openExistingWorkspace()
+        );
+        welcomeTab.putClientProperty("isClosable", false);
+      }
+      tabs.addTab("Welcome", welcomeTab);
+      welcomeShowing = true;
+      updateScriptDependentItems();
+      if (sidebar != null) {
+        sidebar.updateProjectInfo(null, null);
+      }
+      refreshWorkspace();
+    }
+  }
+
+  void hideWelcomeTab() {
+    if (welcomeShowing && welcomeTab != null) {
+      int idx = tabs.indexOfComponent(welcomeTab);
+      if (idx >= 0) {
+        tabs.removeTabAt(idx);
+      }
+      welcomeShowing = false;
+      updateScriptDependentItems();
+    }
+  }
   //</editor-fold>
 
   //<editor-fold desc="03 PaneContext">
@@ -425,15 +738,18 @@ public class SikulixIDE extends JFrame {
 
   PaneContext lastContext = null;
 
-  PaneContext getActiveContext() {
+  public PaneContext getActiveContext() {
     final int ix = tabs.getSelectedIndex();
-    if (ix < 0) {
-      fatal("PaneContext: no context available"); //TODO possible?
+    if (ix < 0 || ix >= contexts.size()) {
+      return null;
     }
     return contexts.get(ix);
   }
 
   PaneContext setActiveContext(int pos) {
+    if (pos < 0 || pos >= contexts.size()) {
+      return null;
+    }
     tabs.setSelectedIndex(pos);
     PaneContext context = contexts.get(pos);
     showContext(context);
@@ -441,18 +757,22 @@ public class SikulixIDE extends JFrame {
   }
 
   PaneContext getContextAt(int ix) {
+    if (ix < 0 || ix >= contexts.size()) {
+      return null;
+    }
     return contexts.get(ix);
   }
 
   void switchContext(int ix) {
-    if (ix < 0) {
+    if (ix < 0 || contexts.isEmpty()) {
       return;
     }
-    if (ix >= contexts.size()) {
-      RunTime.terminate(999, "IDE: switchPane: invalid tab index: %d (valid: 0 .. %d)",
-              ix, contexts.size() - 1);
+    // Account for welcome tab offset
+    int contextIx = welcomeShowing ? ix - 1 : ix;
+    if (contextIx < 0 || contextIx >= contexts.size()) {
+      return;
     }
-    PaneContext context = contexts.get(ix);
+    PaneContext context = contexts.get(contextIx);
     PaneContext previous = lastContext;
     lastContext = context;
 
@@ -480,16 +800,48 @@ public class SikulixIDE extends JFrame {
     } else {
       uncollapseMessageArea();
     }
+
+    // Update sidebar project info and workspace explorer
+    if (sidebar != null) {
+      sidebar.updateProjectInfo(context.getFileName(), context.getFolder());
+    }
+    refreshWorkspace();
+    updateScriptDependentItems();
   }
 
-  void createEmptyScriptContext() {
+  /**
+   * Rebuilds the workspace explorer cards from the current contexts list.
+   */
+  private void refreshWorkspace() {
+    if (explorer == null) return;
+    List<ScriptExplorer.ScriptInfo> scripts = new ArrayList<>();
+    for (PaneContext ctx : contexts) {
+      scripts.add(ScriptExplorer.ScriptInfo.fromFolder(
+          ctx.getFileName(), ctx.getFolder(), ctx.isTemp()));
+    }
+    int selected = tabs.getSelectedIndex();
+    // If welcome tab is showing, no card is selected
+    if (welcomeShowing && selected == 0) {
+      selected = -1;
+    }
+    explorer.updateScripts(scripts, selected);
+  }
+
+  public void createEmptyScriptContext() {
+    hideWelcomeTab();
     final PaneContext context = new PaneContext();
     context.setRunner(IDESupport.getDefaultRunner());
     context.setFile();
     context.create();
+    refreshWorkspace();
+    if (sidebar != null) {
+      sidebar.updateProjectInfo(context.getFileName(), context.getFolder());
+    }
+    updateScriptDependentItems();
   }
 
   void createEmptyTextContext() {
+    hideWelcomeTab();
     final PaneContext context = new PaneContext();
     context.setRunner(Runner.getRunner(TextRunner.class));
     context.setFile();
@@ -497,6 +849,7 @@ public class SikulixIDE extends JFrame {
   }
 
   void createFileContext(File file) {
+    hideWelcomeTab();
     final int pos = alreadyOpen(file);
     if (pos >= 0) {
       setActiveContext(pos);
@@ -530,6 +883,15 @@ public class SikulixIDE extends JFrame {
   }
 
   public File selectFileToOpen() {
+    // Set initial directory to workspace or last script location
+    if (currentWorkspaceDir != null) {
+      PreferencesUser.get().put("LAST_OPEN_DIR", currentWorkspaceDir.getAbsolutePath());
+    } else {
+      PaneContext ctx = getActiveContext();
+      if (ctx != null && ctx.getFolder() != null) {
+        PreferencesUser.get().put("LAST_OPEN_DIR", ctx.getFolder().getParentFile().getAbsolutePath());
+      }
+    }
     File fileSelected = new SikulixFileChooser(sikulixIDE).open();
     if (fileSelected == null) {
       return null;
@@ -538,6 +900,12 @@ public class SikulixIDE extends JFrame {
   }
 
   public File selectFileForSave(PaneContext context) {
+    // Set initial directory to workspace or script location
+    if (currentWorkspaceDir != null) {
+      PreferencesUser.get().put("LAST_OPEN_DIR", currentWorkspaceDir.getAbsolutePath());
+    } else if (context.getFolder() != null && context.getFolder().getParentFile() != null) {
+      PreferencesUser.get().put("LAST_OPEN_DIR", context.getFolder().getParentFile().getAbsolutePath());
+    }
     File fileSelected = new SikulixFileChooser(sikulixIDE).saveAs(
             context.getExt(), context.isBundle() || context.isTemp());
     if (fileSelected == null) {
@@ -570,7 +938,7 @@ public class SikulixIDE extends JFrame {
     return files;
   }
 
-  class PaneContext {
+  public class PaneContext {
     File folder;
     File imageFolder;
     File file;
@@ -699,12 +1067,14 @@ public class SikulixIDE extends JFrame {
           if (_file != null) {
             _ext = FilenameUtils.getExtension(_file.getPath());
           } else {
+            // No script file found in bundle — create one with default extension
             _ext = IDESupport.getDefaultRunner().getDefaultExtension();
+            _file = new File(_folder, _name + "." + _ext);
             try {
               _file.createNewFile();
             } catch (IOException e) {
-              fatal("PaneContext: setFile: create not possible: %s", file); //TODO
-              _file = null;
+              log("PaneContext: setFile: create not possible: %s", _file);
+              return false;
             }
           }
         } else {
@@ -714,8 +1084,9 @@ public class SikulixIDE extends JFrame {
         if (_ext.isEmpty() || _ext.equals("sikuli")) {
           _file.mkdirs();
           _folder = _file;
-          _file = new File(_folder, _name);
-          _ext = "";
+          String scriptExt = IDESupport.getDefaultRunner().getDefaultExtension();
+          _file = new File(_folder, _name + "." + scriptExt);
+          _ext = scriptExt;
         } else {
           _folder = _file.getParentFile();
           _folder.mkdirs();
@@ -723,8 +1094,8 @@ public class SikulixIDE extends JFrame {
         try {
           _file.createNewFile();
         } catch (IOException e) {
-          fatal("PaneContext: setFile: create not possible: %s", file); //TODO
-          _file = null;
+          log("PaneContext: setFile: create not possible: %s", _file);
+          return false;
         }
       }
       if (_file == null) {
@@ -885,7 +1256,7 @@ public class SikulixIDE extends JFrame {
         }
       } else {
         if (resetPos() == 0) {
-          createEmptyScriptContext();
+          showWelcomeTab();
         } else {
           setActiveContext(Math.min(closedPos, contexts.size() - 1));
         }
@@ -1043,6 +1414,10 @@ public class SikulixIDE extends JFrame {
         contextsClosed.add(0, this);
         tabs.setTitleAt(pos, newContext.name);
         sikulixIDE.setIDETitle(newContext.file.getAbsolutePath());
+        sikulixIDE.refreshWorkspace();
+        if (sikulixIDE.sidebar != null) {
+          sikulixIDE.sidebar.updateProjectInfo(newContext.getFileName(), newContext.getFolder());
+        }
       }
       return success;
     }
@@ -1103,7 +1478,7 @@ public class SikulixIDE extends JFrame {
       return true;
     }
 
-    void reparse() {
+    public void reparse() {
       pane.saveCaretPosition();
       if (getShowThumbs()) {
         doShowThumbs();
@@ -1231,11 +1606,13 @@ public class SikulixIDE extends JFrame {
   }
 
   EditorPane getCurrentCodePane() {
-    return getActiveContext().getPane();
+    PaneContext ctx = getActiveContext();
+    return ctx != null ? ctx.getPane() : null;
   }
 
   EditorPane getPaneAtIndex(int index) {
-    return getContextAt(index).getPane();
+    PaneContext ctx = getContextAt(index);
+    return ctx != null ? ctx.getPane() : null;
   }
 
   private void convertSrcToHtml(String bundle) {
@@ -1490,7 +1867,12 @@ public class SikulixIDE extends JFrame {
   //<editor-fold defaultstate="collapsed" desc="04 save / restore session">
   private boolean saveSession(int saveAction) {
     StringBuilder sbuf = new StringBuilder();
-    for (PaneContext context : contexts.toArray(new PaneContext[]{new PaneContext()})) {
+    if (contexts.isEmpty()) {
+      PreferencesUser.get().setIdeSession("");
+      return true;
+    }
+    for (PaneContext context : contexts.toArray(new PaneContext[0])) {
+      if (context == null) continue;
       if (saveAction == DO_SAVE_ALL) {
         if (!context.close()) {
           return false;
@@ -1550,7 +1932,13 @@ public class SikulixIDE extends JFrame {
       for (File file : filesToLoad) {
         createFileContext(file);
       }
-      getContextAt(0).closeSilent();
+      // Close the initial empty script if it was created before session restore
+      if (contexts.size() > filesToLoad.size()) {
+        PaneContext firstCtx = getContextAt(0);
+        if (firstCtx != null) {
+          firstCtx.closeSilent();
+        }
+      }
       tempIndex = 1;
     }
     return filesToLoad;
@@ -1564,6 +1952,94 @@ public class SikulixIDE extends JFrame {
 
   public boolean quit() {
     return terminate();
+  }
+
+  // ── Workspace management ──
+
+  private File currentWorkspaceDir = null;
+  private String currentWorkspaceName = "Workspace";
+
+  private void openNewWorkspaceDialog() {
+    File dir = WorkspaceDialog.showDialog(ideWindow);
+    if (dir != null) {
+      loadWorkspace(dir);
+    }
+  }
+
+  private void openExistingWorkspace() {
+    JFileChooser chooser = new JFileChooser();
+    chooser.setDialogTitle("Open Workspace");
+    chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+    chooser.setAcceptAllFileFilterUsed(false);
+    // Start in workspace dir or last known location
+    if (currentWorkspaceDir != null) {
+      chooser.setCurrentDirectory(currentWorkspaceDir.getParentFile());
+    } else {
+      String lastDir = PreferencesUser.get().get("LAST_OPEN_DIR", "");
+      if (!lastDir.isEmpty()) chooser.setCurrentDirectory(new File(lastDir));
+    }
+    int result = chooser.showOpenDialog(ideWindow);
+    if (result == JFileChooser.APPROVE_OPTION) {
+      loadWorkspace(chooser.getSelectedFile());
+    }
+  }
+
+  private void loadWorkspace(File dir) {
+    currentWorkspaceDir = dir;
+
+    // Try to read workspace.json for the name
+    File wsJson = new File(dir, "workspace.json");
+    if (wsJson.exists()) {
+      try {
+        String content = org.sikuli.support.FileManager.readFileToString(wsJson);
+        // Simple JSON name extraction
+        int nameIdx = content.indexOf("\"name\"");
+        if (nameIdx > 0) {
+          int valueStart = content.indexOf("\"", nameIdx + 7) + 1;
+          int valueEnd = content.indexOf("\"", valueStart);
+          currentWorkspaceName = content.substring(valueStart, valueEnd);
+        }
+      } catch (Exception e) {
+        currentWorkspaceName = dir.getName();
+      }
+    } else {
+      currentWorkspaceName = dir.getName();
+    }
+
+    // Update explorer header
+    if (explorer != null) {
+      explorer.setWorkspaceName(currentWorkspaceName);
+    }
+
+    // Load any .sikuli scripts in the workspace directory
+    File[] sikuliDirs = dir.listFiles(f -> f.isDirectory() && f.getName().endsWith(".sikuli"));
+    if (sikuliDirs != null) {
+      for (File script : sikuliDirs) {
+        try {
+          // Check that the .sikuli bundle contains at least one .py file
+          File[] pyFiles = script.listFiles((d, name) -> name.endsWith(".py"));
+          if (pyFiles != null && pyFiles.length > 0) {
+            createFileContext(script);
+          } else {
+            log("Workspace: skipping %s (no .py file found)", script.getName());
+          }
+        } catch (Exception e) {
+          log("Workspace: error loading %s: %s", script.getName(), e.getMessage());
+        }
+      }
+    }
+
+    refreshWorkspace();
+
+    log("Workspace loaded: %s (%s)", currentWorkspaceName, dir.getAbsolutePath());
+  }
+
+  public File getCurrentWorkspaceDir() {
+    return currentWorkspaceDir;
+  }
+
+  public String getCurrentWorkspaceName() {
+    return currentWorkspaceName;
   }
 
   public void showPreferencesWindow() {
@@ -1657,6 +2133,14 @@ public class SikulixIDE extends JFrame {
     return createMenuItem(item, shortcut, listener);
   }
 
+  /** Creates a disabled menu item used as a section header label. */
+  JMenuItem createSectionLabel(String text) {
+    JMenuItem label = new JMenuItem("── " + text + " ──");
+    label.setEnabled(false);
+    label.setFont(UIManager.getFont("defaultFont").deriveFont(Font.BOLD, 11f));
+    return label;
+  }
+
   class MenuAction implements ActionListener {
 
     Method actMethod = null;
@@ -1718,21 +2202,30 @@ public class SikulixIDE extends JFrame {
       _fileMenu.addSeparator();
     }
 
-    _fileMenu.add(createMenuItem(_I("menuFileNew"),
+    // ── Nouveau ──
+    _fileMenu.add(createSectionLabel(_I("menuFileNew")));
+    _fileMenu.add(createMenuItem("\uD83D\uDCC4  Script",
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_N, scMask),
             new FileAction(FileAction.NEW)));
+    _fileMenu.add(createMenuItem("\uD83D\uDCC1  Workspace",
+            null,
+            e -> openNewWorkspaceDialog()));
 
-    jmi = _fileMenu.add(createMenuItem(_I("menuFileOpen"),
+    // ── Ouvrir ──
+    _fileMenu.add(createSectionLabel(_I("menuFileOpen")));
+    _fileMenu.add(createMenuItem("\uD83D\uDCC4  Script",
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O, scMask),
             new FileAction(FileAction.OPEN)));
-    jmi.setName("OPEN");
+    _fileMenu.add(createMenuItem("\uD83D\uDCC1  Workspace",
+            null,
+            e -> openExistingWorkspace()));
 
     recentMenu = new JMenu(_I("menuRecent"));
+    _fileMenu.add(recentMenu);
 
-    if (Settings.experimental) {
-      _fileMenu.add(recentMenu);
-    }
+    _fileMenu.addSeparator();
 
+    // ── Enregistrer ──
     jmi = _fileMenu.add(createMenuItem(_I("menuFileSave"),
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_S, scMask),
             new FileAction(FileAction.SAVE)));
@@ -1749,14 +2242,7 @@ public class SikulixIDE extends JFrame {
                     InputEvent.SHIFT_DOWN_MASK | scMask),
             new FileAction(FileAction.EXPORT)));
 
-    _fileMenu.add(createMenuItem("Export as jar",
-            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_J, scMask),
-            new FileAction(FileAction.ASJAR)));
-
-    _fileMenu.add(createMenuItem("Export as runnable jar",
-            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_J,
-                    InputEvent.SHIFT_DOWN_MASK | scMask),
-            new FileAction(FileAction.ASRUNJAR)));
+    _fileMenu.addSeparator();
 
     jmi = _fileMenu.add(createMenuItem(_I("menuFileCloseTab"),
             KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_W, scMask),
@@ -1769,19 +2255,6 @@ public class SikulixIDE extends JFrame {
               KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_P, scMask),
               new FileAction(FileAction.PREFERENCES)));
     }
-
-    _fileMenu.addSeparator();
-    _fileMenu.add(createMenuItem("Open Special Files",
-            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_O, InputEvent.ALT_DOWN_MASK | scMask),
-            new FileAction(FileAction.OPEN_SPECIAL)));
-
-//TODO restart IDE
-/*
-    _fileMenu.add(createMenuItem("Restart IDE",
-            KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_R,
-                    InputEvent.SHIFT_DOWN_MASK | InputEvent.ALT_DOWN_MASK),
-            new FileAction(FileAction.RESTART)));
-*/
     if (IDEDesktopSupport.showQuit) {
       _fileMenu.addSeparator();
       _fileMenu.add(createMenuItem(_I("menuFileQuit"),
@@ -2098,7 +2571,7 @@ public class SikulixIDE extends JFrame {
     }
 
     private boolean _find(String str, int begin, boolean forward) {
-      if (str == "!") {
+      if ("!".equals(str)) {
         return false;
       }
       EditorPane codePane = getCurrentCodePane();
@@ -2333,18 +2806,6 @@ public class SikulixIDE extends JFrame {
     _toolMenu.add(createMenuItem(_I("menuToolExtensions"),
             null,
             new ToolAction(ToolAction.EXTENSIONS)));
-
-    _toolMenu.add(createMenuItem("Pack Jar with Jython",
-            null,
-            new ToolAction(ToolAction.JARWITHJYTHON)));
-
-    _toolMenu.add(createMenuItem("Pack Jar with Jython",
-        null,
-        new ToolAction(ToolAction.JARWITHJYTHON)));
-
-    _toolMenu.add(createMenuItem(_I("menuToolAndroid"),
-            null,
-            new ToolAction(ToolAction.ANDROID)));
   }
 
   class ToolAction extends MenuAction {
@@ -2510,44 +2971,40 @@ public class SikulixIDE extends JFrame {
     _helpMenu.add(createMenuItem(_I("menuHelpBugReport"),
             null, new HelpAction(HelpAction.OPEN_BUG_REPORT)));
 
-//    _helpMenu.add(createMenuItem(_I("menuHelpTranslation"),
-//            null, new HelpAction(HelpAction.OPEN_TRANSLATION)));
     _helpMenu.addSeparator();
     _helpMenu.add(createMenuItem(_I("menuHelpHomepage"),
             null, new HelpAction(HelpAction.OPEN_HOMEPAGE)));
-
-//    _helpMenu.addSeparator();
-//    _helpMenu.add(createMenuItem("SikuliX1 Downloads",
-//        null, new HelpAction(HelpAction.OPEN_DOWNLOADS)));
-//    _helpMenu.add(createMenuItem(_I("menuHelpCheckUpdate"),
-//        null, new HelpAction(HelpAction.CHECK_UPDATE)));
+    _helpMenu.addSeparator();
+    _helpMenu.add(createMenuItem(_I("menuHelpCheckUpdate"),
+            null, new HelpAction(HelpAction.CHECK_UPDATE)));
   }
 
   private void lookUpdate() {
     newBuildAvailable = null;
-    String token = "This version was built at ";
-    String httpDownload = "#https://raiman.github.io/SikuliX1/downloads.html";
-    String pageDownload = FileManager.downloadURLtoString(httpDownload);
-    if (!pageDownload.isEmpty()) {
-      newBuildAvailable = false;
-    }
-    int locStamp = pageDownload.indexOf(token);
-    if (locStamp > 0) {
-      locStamp += token.length();
-      String latestBuildFull = pageDownload.substring(locStamp, locStamp + 16);
-      String latestBuild = latestBuildFull.replaceAll("-", "").replace("_", "").replace(":", "");
-      String actualBuild = Commons.getSxBuildStamp();
-      try {
-        long lb = Long.parseLong(latestBuild);
-        long ab = Long.parseLong(actualBuild);
-        if (lb > ab) {
-          newBuildAvailable = true;
-          newBuildStamp = latestBuildFull;
+    try {
+      String apiUrl = "https://api.github.com/repos/oculix-org/Oculix/releases/latest";
+      String response = FileManager.downloadURLtoString(apiUrl);
+      if (response != null && !response.isEmpty()) {
+        // Parse tag_name from JSON response (simple extraction)
+        int tagIdx = response.indexOf("\"tag_name\"");
+        if (tagIdx > 0) {
+          int valueStart = response.indexOf("\"", tagIdx + 11) + 1;
+          int valueEnd = response.indexOf("\"", valueStart);
+          String latestTag = response.substring(valueStart, valueEnd);
+          // Remove leading 'v' if present
+          String latestVersion = latestTag.startsWith("v") ? latestTag.substring(1) : latestTag;
+          String currentVersion = Commons.getSXVersionShort();
+          log("Check update: latest=%s current=%s", latestVersion, currentVersion);
+          if (!latestVersion.equals(currentVersion)) {
+            newBuildAvailable = true;
+            newBuildStamp = latestVersion;
+          } else {
+            newBuildAvailable = false;
+          }
         }
-        log("latest build: %s this build: %s (newer: %s)", latestBuild, actualBuild, newBuildAvailable);
-      } catch (NumberFormatException e) {
-        log("check for new build: stamps not readable");
       }
+    } catch (Exception e) {
+      log("Check update failed: %s", e.getMessage());
     }
   }
 
@@ -3117,6 +3574,8 @@ public class SikulixIDE extends JFrame {
           resetErrorMark();
           doBeforeRun();
 
+          long runStart = System.currentTimeMillis();
+
           IRunner.Options runOptions = new IRunner.Options();
           runOptions.setRunningInIDE();
 
@@ -3134,6 +3593,15 @@ public class SikulixIDE extends JFrame {
           } finally {
             Runner.setLastScriptRunReturnCode(exitValue);
           }
+
+          // Update sidebar last run info
+          final int finalExit = exitValue;
+          final long duration = System.currentTimeMillis() - runStart;
+          EventQueue.invokeLater(() -> {
+            if (sidebar != null) {
+              sidebar.updateLastRun(finalExit, duration);
+            }
+          });
 
           log("************** after RunScript");
           addErrorMark(runOptions.getErrorLine());
