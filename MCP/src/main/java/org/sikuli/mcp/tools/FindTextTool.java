@@ -37,9 +37,12 @@ public final class FindTextTool implements Tool {
   @Override public JSONObject call(JSONObject args) throws Exception {
     String text = args.getString("text");
     Region region;
-    if (args.has("region")) {
-      region = RegionSpec.fromJson(args.getJSONObject("region"));
+    JSONObject regionJson = args.optJSONObject("region");
+    if (regionJson != null && regionJson.has("x") && regionJson.has("y")
+        && regionJson.has("width") && regionJson.has("height")) {
+      region = RegionSpec.fromJson(regionJson);
     } else {
+      // No region (or empty object sent by some clients) — search full screen 0
       Screen s = new Screen();
       region = Region.create(s.x, s.y, s.w, s.h, s);
     }

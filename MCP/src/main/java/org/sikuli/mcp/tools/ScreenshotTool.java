@@ -32,10 +32,13 @@ public final class ScreenshotTool implements Tool {
 
   @Override public JSONObject call(JSONObject args) throws Exception {
     ScreenImage img;
-    if (args.has("region")) {
-      Region r = RegionSpec.fromJson(args.getJSONObject("region"));
+    JSONObject region = args.optJSONObject("region");
+    if (region != null && region.has("x") && region.has("y")
+        && region.has("width") && region.has("height")) {
+      Region r = RegionSpec.fromJson(region);
       img = r.getScreen().capture(r);
     } else {
+      // No region (or empty object sent by some clients) — capture full screen 0
       img = new Screen().capture();
     }
     BufferedImage bi = img.getImage();
