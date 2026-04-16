@@ -11,7 +11,7 @@
 [![Fork of](https://img.shields.io/badge/Fork%20of-SikuliX1%20%28archived%29-lightgrey?style=flat-square)](https://github.com/RaiMan/SikuliX1)
 [![Maintained](https://img.shields.io/badge/Maintained-Yes-brightgreen?style=flat-square)](https://github.com/julienmerconsulting/OculiX)
 [![Changes](https://img.shields.io/badge/Changes%20vs%20SikuliX-123%2C728%20insertions-blue?style=flat-square)]()
-[![Version](https://img.shields.io/badge/Version-3.0.1-blue?style=flat-square)]()
+[![Version](https://img.shields.io/badge/Version-3.0.2-blue?style=flat-square)]()
 
 <br/>
 
@@ -164,7 +164,7 @@ mvn clean install -DskipTests
 <dependency>
   <groupId>com.sikulix</groupId>
   <artifactId>oculixapi</artifactId>
-  <version>3.0.1</version>
+  <version>3.0.2</version>
 </dependency>
 ```
 
@@ -320,7 +320,7 @@ If you were using SikuliX and looking for a continuation — **you found it.**
 ```
 Apertix      → OpenCV 4.10.0 custom build (fork openpnp/opencv)
     ↓
-OculiX       → visual automation engine (fork SikuliX1) — v3.0.1
+OculiX       → visual automation engine (fork SikuliX1) — v3.0.2
     ↓
 Operix       → Python wrapper via py4j (coming soon)
 ```
@@ -328,7 +328,7 @@ Operix       → Python wrapper via py4j (coming soon)
 | Project | Repo | Status |
 |---|---|---|
 | Apertix | [julienmerconsulting/Apertix](https://github.com/julienmerconsulting/Apertix) | ✅ v4.10.0-0 |
-| OculiX | [julienmerconsulting/OculiX](https://github.com/julienmerconsulting/OculiX) | ✅ v3.0.1 |
+| OculiX | [julienmerconsulting/OculiX](https://github.com/julienmerconsulting/OculiX) | ✅ v3.0.2 |
 | Operix | coming soon | 🔬 In design |
 
 ---
