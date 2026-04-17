@@ -243,7 +243,12 @@ public class SikulixIDE extends JFrame {
   public boolean terminate() {
     log("Quit requested");
     if (closeIDE()) {
-      RunTime.terminate(0, "");
+      try {
+        RunTime.terminate(0, "");
+      } catch (Exception ex) {
+        log("Quit: RunTime.terminate failed — forcing exit");
+        System.exit(1);
+      }
     }
     log("Quit: cancelled or did not work");
     return false;
