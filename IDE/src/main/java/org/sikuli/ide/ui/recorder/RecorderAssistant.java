@@ -29,8 +29,6 @@ public class RecorderAssistant extends JDialog {
   private final JythonCodeGenerator codeGenerator;
   private File screenshotDir;
 
-  // App scope: Screen (full) or App.window() (scoped)
-  private Region actionScope = new Screen();
   private App currentApp = null;
 
   // UI components
@@ -227,7 +225,7 @@ public class RecorderAssistant extends JDialog {
     // Launch / Close app
     btnLaunchApp.addActionListener(e -> handleLaunchApp());
     btnCloseApp.addActionListener(e -> handleCloseApp());
-    chkScopeToApp.addActionListener(e -> updateActionScope());
+    chkScopeToApp.addActionListener(e -> {});
 
     // Image actions
     btnClick.addActionListener(e -> handleImageCapture("click"));
@@ -258,6 +256,7 @@ public class RecorderAssistant extends JDialog {
    */
   private void hideForCapture() {
     setVisible(false);
+    focusAppIfScoped();
   }
 
   private void showAfterCapture() {
@@ -287,7 +286,7 @@ public class RecorderAssistant extends JDialog {
             javax.imageio.ImageIO.read(new File(imagePath));
         if (candidate != null) {
           result = PatternValidator.validate(
-              new Screen().capture(actionScope).getImage(), candidate);
+              new Screen().capture().getImage(), candidate);
         }
       } catch (Exception | UnsatisfiedLinkError ignored) {
         // OpenCV missing or IO error — skip validation
@@ -308,7 +307,7 @@ public class RecorderAssistant extends JDialog {
       }
 
       String code = generateImageCode(actionType, pattern);
-      codePreview.addLine(code);
+      addActionCode(code);
       workflow.onActionComplete(); // -> IDLE
 
     } catch (Exception ex) {
@@ -319,6 +318,13 @@ public class RecorderAssistant extends JDialog {
 
   private boolean isAppScoped() {
     return currentApp != null && chkScopeToApp.isSelected();
+  }
+
+  private void addActionCode(String code) {
+    if (isAppScoped()) {
+      codePreview.addLine("app.focus()");
+    }
+    codePreview.addLine(code);
   }
 
   private String generateImageCode(String actionType, Pattern pattern) {
@@ -341,7 +347,7 @@ public class RecorderAssistant extends JDialog {
         code = "# " + actionType + "(\"" + pattern.getFilename() + "\")";
         break;
     }
-    return isAppScoped() ? "region." + code : code;
+    return code;
   }
 
   private void handleDragDrop() {
@@ -366,7 +372,7 @@ public class RecorderAssistant extends JDialog {
       Pattern sourcePattern = new Pattern(sourcePath);
       Pattern destPattern = new Pattern(destPath);
       String code = codeGenerator.dragDrop(sourcePattern, destPattern);
-      codePreview.addLine(code);
+      addActionCode(code);
       workflow.onActionComplete();
       RecorderNotifications.success("Drag & Drop recorded");
     } catch (Exception ex) {
@@ -408,7 +414,7 @@ public class RecorderAssistant extends JDialog {
           String[] lines = dialog.getResultLines();
 
           if (lines != null) {
-            for (String line : lines) codePreview.addLine(line);
+            for (String line : lines) addActionCode(line);
             RecorderNotifications.success("Swipe recorded");
           }
           workflow.onActionComplete();
@@ -447,7 +453,7 @@ public class RecorderAssistant extends JDialog {
           String code = dialog.getResult();
 
           if (code != null) {
-            codePreview.addLine(code);
+            addActionCode(code);
           }
           workflow.onActionComplete();
         } catch (Exception ex) {
@@ -474,7 +480,7 @@ public class RecorderAssistant extends JDialog {
     String text = JOptionPane.showInputDialog(this, label, "Text Action",
         JOptionPane.PLAIN_MESSAGE);
     if (text != null && !text.trim().isEmpty()) {
-      codePreview.addLine(generateTextCode(actionType, text.trim()));
+      addActionCode(generateTextCode(actionType, text.trim()));
     }
     workflow.onActionComplete();
   }
@@ -501,7 +507,7 @@ public class RecorderAssistant extends JDialog {
         JOptionPane.PLAIN_MESSAGE);
     if (text != null && !text.isEmpty()) {
       String code = codeGenerator.typeText(text, new String[0]);
-      codePreview.addLine(code);
+      addActionCode(code);
     }
     workflow.onActionComplete();
   }
@@ -513,7 +519,7 @@ public class RecorderAssistant extends JDialog {
     dialog.setVisible(true);
     String combo = dialog.getResult();
     if (combo != null && !combo.isEmpty()) {
-      codePreview.addLine(combo);
+      addActionCode(combo);
     }
     workflow.onActionComplete();
   }
@@ -784,15 +790,9 @@ public class RecorderAssistant extends JDialog {
 
       codePreview.addLine("app = App.open(\"" + appPath + "\")");
       if (chkScopeToApp.isSelected()) {
-        codePreview.addLine("region = app.window()");
+        codePreview.addLine("app.focus()");
       }
       RecorderNotifications.success("Launched: " + appPath);
-
-      try {
-        updateActionScope();
-      } catch (Exception ignored) {
-        actionScope = new Screen();
-      }
     } catch (Exception ex) {
       RecorderNotifications.error("Launch failed: " + ex.getMessage());
     }
@@ -809,18 +809,17 @@ public class RecorderAssistant extends JDialog {
       }
     }
     currentApp = null;
-    actionScope = new Screen();
     btnLaunchApp.setEnabled(true);
     btnCloseApp.setEnabled(false);
     chkScopeToApp.setEnabled(false);
   }
 
-  private void updateActionScope() {
+  private void focusAppIfScoped() {
     if (currentApp != null && chkScopeToApp.isSelected()) {
-      Region appWindow = currentApp.window();
-      actionScope = appWindow != null ? appWindow : new Screen();
-    } else {
-      actionScope = new Screen();
+      try {
+        currentApp.focus();
+      } catch (Exception ignored) {
+      }
     }
   }
 
