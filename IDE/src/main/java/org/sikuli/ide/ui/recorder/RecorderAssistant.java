@@ -280,6 +280,38 @@ public class RecorderAssistant extends JDialog {
   private void handleImageCapture(String actionType) {
     if (!workflow.startCapture(actionType)) return;
 
+    java.util.List<String> options = new java.util.ArrayList<>();
+    options.add("Capture screen");
+    options.add("Browse file...");
+    if (!capturedImages.isEmpty()) {
+      options.add("Use existing image");
+    }
+
+    int choice = JOptionPane.showOptionDialog(this,
+        "Choose image source for: " + actionType,
+        actionType,
+        JOptionPane.DEFAULT_OPTION, JOptionPane.QUESTION_MESSAGE,
+        null, options.toArray(), options.get(0));
+
+    if (choice < 0) {
+      workflow.reset();
+      return;
+    }
+    String selected = (String) options.get(choice);
+
+    if ("Browse file...".equals(selected)) {
+      String imagePath = browseImage();
+      if (imagePath == null) { workflow.reset(); return; }
+      finishImageCapture(actionType, imagePath);
+      return;
+    }
+    if ("Use existing image".equals(selected)) {
+      String imagePath = pickFromLibrary();
+      if (imagePath == null) { workflow.reset(); return; }
+      finishImageCapture(actionType, imagePath);
+      return;
+    }
+
     hideForCapture();
 
     new Thread(() -> {
@@ -304,38 +336,7 @@ public class RecorderAssistant extends JDialog {
           String imagePath = capture.save(screenshotDir.getAbsolutePath(), imageName);
           if (imagePath != null) capturedImages.add(imagePath);
 
-          workflow.onCaptureComplete();
-
-          Pattern pattern = new Pattern(imagePath);
-
-          PatternValidator.ValidationResult result = null;
-          try {
-            java.awt.image.BufferedImage candidate =
-                javax.imageio.ImageIO.read(new File(imagePath));
-            if (candidate != null) {
-              result = PatternValidator.validate(
-                  new Screen().capture().getImage(), candidate);
-            }
-          } catch (Exception | UnsatisfiedLinkError ignored) {
-          }
-
-          if (result != null) {
-            if (result.warning == PatternValidator.Warning.AMBIGUOUS) {
-              pattern = pattern.similar((float) result.suggestedSimilarity);
-              RecorderNotifications.warning(
-                  "Pattern matches " + result.matchCount + " locations. Similarity raised to " + result.suggestedSimilarity);
-            } else if (result.warning == PatternValidator.Warning.COLOR_DEPENDENT) {
-              RecorderNotifications.warning("Pattern depends on colors. May break with theme changes.");
-            } else if (result.warning == PatternValidator.Warning.TOO_SMALL) {
-              RecorderNotifications.warning("Pattern too small. Consider capturing a larger area.");
-            } else if (result.matchCount > 0) {
-              RecorderNotifications.success("Pattern validated (score: " + String.format("%.2f", result.bestScore) + ")");
-            }
-          }
-
-          String code = generateImageCode(actionType, pattern);
-          addActionCode(code);
-          workflow.onActionComplete();
+          finishImageCapture(actionType, imagePath);
 
         } catch (Exception ex) {
           workflow.reset();
@@ -343,6 +344,47 @@ public class RecorderAssistant extends JDialog {
         }
       });
     }).start();
+  }
+
+  private void finishImageCapture(String actionType, String imagePath) {
+    workflow.onCaptureComplete();
+
+    try {
+      Pattern pattern = new Pattern(imagePath);
+
+      PatternValidator.ValidationResult result = null;
+      try {
+        java.awt.image.BufferedImage candidate =
+            javax.imageio.ImageIO.read(new File(imagePath));
+        if (candidate != null) {
+          result = PatternValidator.validate(
+              new Screen().capture().getImage(), candidate);
+        }
+      } catch (Exception | UnsatisfiedLinkError ignored) {
+      }
+
+      if (result != null) {
+        if (result.warning == PatternValidator.Warning.AMBIGUOUS) {
+          pattern = pattern.similar((float) result.suggestedSimilarity);
+          RecorderNotifications.warning(
+              "Pattern matches " + result.matchCount + " locations. Similarity raised to " + result.suggestedSimilarity);
+        } else if (result.warning == PatternValidator.Warning.COLOR_DEPENDENT) {
+          RecorderNotifications.warning("Pattern depends on colors. May break with theme changes.");
+        } else if (result.warning == PatternValidator.Warning.TOO_SMALL) {
+          RecorderNotifications.warning("Pattern too small. Consider capturing a larger area.");
+        } else if (result.matchCount > 0) {
+          RecorderNotifications.success("Pattern validated (score: " + String.format("%.2f", result.bestScore) + ")");
+        }
+      }
+
+      String code = generateImageCode(actionType, pattern);
+      addActionCode(code);
+      workflow.onActionComplete();
+
+    } catch (Exception ex) {
+      workflow.reset();
+      RecorderNotifications.error("Action failed: " + ex.getMessage());
+    }
   }
 
   private boolean isAppScoped() {
