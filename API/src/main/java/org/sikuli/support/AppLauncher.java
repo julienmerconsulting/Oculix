@@ -99,18 +99,14 @@ public class AppLauncher {
   // ═══════════════════════════════════════════════════════════════════════
 
   static String resolveDisplayIp() throws IOException {
-    if (!Commons.runningWindows()) return "localhost";
+    if (!Commons.runningWindows()) return "";
 
     // Try 1: WSL adapter in ipconfig (classic NAT mode)
     Optional<String> wslIp = getWslIpFromIpconfig();
     if (wslIp.isPresent()) return wslIp.get();
 
-    // Try 2: nameserver in /etc/resolv.conf (virtioproxy / mirrored mode)
-    Optional<String> nsIp = getWslIpFromResolvConf();
-    if (nsIp.isPresent()) return nsIp.get();
-
-    // Fallback: localhost (may work with mirrored networking)
-    return "localhost";
+    // virtioproxy / mirrored: DISPLAY=:0 (no IP needed)
+    return "";
   }
 
   private static Optional<String> getWslIpFromIpconfig() throws IOException {
@@ -198,12 +194,14 @@ public class AppLauncher {
       String ssh = String.format("sshpass -p '%s' ssh %s %s@%s '%s'",
           sshPassword, sshOptions, sshUser, targetIp, vnc);
 
+      String display = displayIp.isEmpty() ? ":0" : displayIp + ":0.0";
+
       if (Commons.runningWindows()) {
         return String.format(
-            "cmd /k start /min C:\\Windows\\System32\\wsl.exe bash -c \"DISPLAY=%s:0.0 %s\"",
-            displayIp, ssh);
+            "cmd /k start /min C:\\Windows\\System32\\wsl.exe bash -c \"export DISPLAY=%s && %s\"",
+            display, ssh);
       } else {
-        return String.format("DISPLAY=%s:0.0 %s", displayIp, ssh);
+        return String.format("DISPLAY=%s %s", display, ssh);
       }
     }
   }
